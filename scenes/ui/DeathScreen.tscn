@@ -1,0 +1,67 @@
+[gd_scene load_steps=4 format=3 uid="uid://hjx6q7ew8d42"]
+
+[ext_resource type="Script" uid="uid://bcjo4ny2y75ye" path="res://scripts/DeathScreen.gd" id="1_abcde"]
+[ext_resource type="FontFile" uid="uid://cilxm5ndn5l0y" path="res://assets/fonts/October Crow.ttf" id="2_yar2g"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_xj0m4"]
+font = ExtResource("2_yar2g")
+font_size = 64
+font_color = Color(1, 0, 0, 1)
+
+[node name="DeathScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_abcde")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 2
+offset_left = -54.0
+offset_top = 68.0
+offset_right = 1218.0
+offset_bottom = 203.0
+text = "You're not the first
+THE DARKNESS ALWAYS WINS"
+label_settings = SubResource("LabelSettings_xj0m4")
+horizontal_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -58.0
+offset_top = -31.0
+offset_right = 58.0
+offset_bottom = 31.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Button" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_yar2g")
+theme_override_font_sizes/font_size = 32
+text = "Restart"
+
+[node name="Button2" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_yar2g")
+theme_override_font_sizes/font_size = 32
+text = "Quit"
+
+[connection signal="pressed" from="VBoxContainer/Button" to="." method="_on_Button_pressed"]
+[connection signal="pressed" from="VBoxContainer/Button2" to="." method="_on_Button_pressed"]
