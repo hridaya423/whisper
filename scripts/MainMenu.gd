@@ -193,7 +193,7 @@ func setup_containers(node: Node):
 
 func connect_button_logic():
 	var play_button = find_button_by_text("START GAME")
-	var settings_button = find_button_by_text("SETTINGS")
+	var settings_button = find_button_by_text("OPTIONS")
 	var quit_button = find_button_by_text("QUIT")
 	
 	if play_button and not play_button.pressed.is_connected(_on_play_pressed):
