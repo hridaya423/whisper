@@ -1,0 +1,136 @@
+[gd_scene load_steps=18 format=3 uid="uid://kwtk3huoscm5"]
+
+[ext_resource type="PackedScene" uid="uid://bkj3efqmuws2y" path="res://scenes/player/Player.tscn" id="1_uwrxv"]
+[ext_resource type="Texture2D" uid="uid://xwt5qapegddp" path="res://images.png" id="2_yqjtg"]
+[ext_resource type="Script" uid="uid://drcrdk2px3jpl" path="res://scripts/GameManager.gd" id="3_lnu2h"]
+[ext_resource type="Script" uid="uid://5tqcoil2dlb2" path="res://scripts/SonarSystem.gd" id="4_lbhrr"]
+[ext_resource type="FontFile" uid="uid://crsyfbiou73cv" path="res://assets/fonts/Federant-Regular.ttf" id="5_iywne"]
+[ext_resource type="Texture2D" uid="uid://7nfunsjysvf7" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_e.svg" id="6_p57ef"]
+[ext_resource type="Texture2D" uid="uid://balg01hgr78km" path="res://assets/sprites/rune_longersonar.png" id="7_gee14"]
+[ext_resource type="Script" uid="uid://cpie88oaaixuq" path="res://scripts/RuneSystem.gd" id="7_u5sy4"]
+[ext_resource type="Script" uid="uid://vmn7tesl7qfk" path="res://scripts/RunePickup.gd" id="8_0tnpc"]
+[ext_resource type="PackedScene" uid="uid://b4b2ndeorm700" path="res://scenes/EnemySpawner.tscn" id="10_vtaks"]
+[ext_resource type="PackedScene" uid="uid://c2s1bo57fwo8b" path="res://scenes/enemy.tscn" id="11_kvpfn"]
+[ext_resource type="Script" uid="uid://casxmatuvwuxq" path="res://scripts/LevelManager.gd" id="12_dinhu"]
+[ext_resource type="Texture2D" uid="uid://ylhfwmkxo8b4" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_g.svg" id="13_kvuet"]
+[ext_resource type="Texture2D" uid="uid://cjwg2h28nn38l" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_q_outline.svg" id="14_trtic"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_lnu2h"]
+resource_name = "<null>"
+texture = ExtResource("2_yqjtg")
+0:0/next_alternative_id = 2
+0:0/0 = 0
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+1:0/0 = 0
+1:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+0:1/0 = 0
+0:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+1:1/0 = 0
+1:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+
+[sub_resource type="TileSet" id="TileSet_yqjtg"]
+physics_layer_0/collision_layer = 1
+navigation_layer_0/layers = 1
+sources/2 = SubResource("TileSetAtlasSource_lnu2h")
+
+[sub_resource type="LabelSettings" id="LabelSettings_lbhrr"]
+font = ExtResource("5_iywne")
+
+[node name="Main" type="Node2D"]
+
+[node name="GameManager" type="Node2D" parent="."]
+scale = Vector2(1, 1.02816)
+script = ExtResource("3_lnu2h")
+
+[node name="SonarSystem" type="Node2D" parent="."]
+scale = Vector2(1, 1.02816)
+script = ExtResource("4_lbhrr")
+
+[node name="Node2D" type="Node2D" parent="."]
+
+[node name="DurationRune" type="Sprite2D" parent="Node2D"]
+position = Vector2(2656, 39)
+scale = Vector2(0.148437, 0.148437)
+texture = ExtResource("7_gee14")
+script = ExtResource("8_0tnpc")
+
+[node name="RuneSystem" type="Node" parent="."]
+script = ExtResource("7_u5sy4")
+metadata/_custom_type_script = "uid://cpie88oaaixuq"
+
+[node name="EnemySpawner" parent="." instance=ExtResource("10_vtaks")]
+position = Vector2(2059, 212)
+scale = Vector2(-1.2176, 1.6792)
+enemy_scene = ExtResource("11_kvpfn")
+
+[node name="TileMapLayer" type="TileMap" parent="."]
+scale = Vector2(1, 1.02816)
+tile_set = SubResource("TileSet_yqjtg")
+format = 2
+layer_0/tile_data = PackedInt32Array(131070, 2, 0, 131071, 2, 0, 65536, 2, 0, 65537, 2, 0, 65538, 2, 0, 65539, 2, 0, 65540, 2, 0, 65541, 2, 0, 65542, 2, 0, 65543, 2, 0, 65544, 2, 0, 65545, 2, 0, 65546, 2, 0, 65547, 2, 0, 65548, 2, 0, 65549, 2, 0, 65550, 2, 0)
+
+[node name="Player" parent="." node_paths=PackedStringArray("tilemap_layer") instance=ExtResource("1_uwrxv")]
+position = Vector2(-1, 0)
+scale = Vector2(1, 1.02816)
+tilemap_layer = NodePath("../TileMapLayer")
+
+[node name="Camera2D" type="Camera2D" parent="Player" groups=["level_manager"]]
+zoom = Vector2(3, 3)
+position_smoothing_enabled = true
+
+[node name="LevelManager" type="Node2D" parent="."]
+script = ExtResource("12_dinhu")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="prompts" type="Node" parent="."]
+
+[node name="Label" type="Label" parent="prompts"]
+offset_left = -47.0
+offset_top = -85.0
+offset_right = 79.0
+offset_bottom = -55.0
+scale = Vector2(1, 1.02816)
+text = "Press"
+label_settings = SubResource("LabelSettings_lbhrr")
+metadata/_edit_use_anchors_ = true
+
+[node name="KeyboardE" type="Sprite2D" parent="prompts"]
+position = Vector2(6, -73)
+scale = Vector2(0.433593, 0.433593)
+texture = ExtResource("6_p57ef")
+
+[node name="Label2" type="Label" parent="prompts"]
+anchors_preset = -1
+anchor_left = 21.4603
+anchor_top = 4.38951
+anchor_right = 21.4603
+anchor_bottom = 4.38951
+offset_left = -22125.3
+offset_top = -2854.4
+offset_right = -21999.3
+offset_bottom = -2824.4
+scale = Vector2(1, 1.02816)
+text = "might need"
+label_settings = SubResource("LabelSettings_lbhrr")
+metadata/_edit_use_anchors_ = true
+
+[node name="KeyboardG" type="Sprite2D" parent="prompts"]
+position = Vector2(2697, 0)
+scale = Vector2(0.421875, 0.421875)
+texture = ExtResource("13_kvuet")
+
+[node name="Label3" type="Label" parent="prompts"]
+offset_left = 1292.0
+offset_top = -28.0
+offset_right = 1418.0
+offset_bottom = 2.0
+scale = Vector2(1, 1.02816)
+text = "might help"
+label_settings = SubResource("LabelSettings_lbhrr")
+metadata/_edit_use_anchors_ = true
+
+[node name="KeyboardQOutline" type="Sprite2D" parent="prompts"]
+position = Vector2(1276, -17)
+scale = Vector2(0.453125, 0.453125)
+texture = ExtResource("14_trtic")
