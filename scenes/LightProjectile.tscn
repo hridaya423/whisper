@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://bll8ibtgn4r4t"]
+
+[ext_resource type="Script" uid="uid://c43dp3jlkb6lq" path="res://scripts/LightProjectile.gd" id="1_mrsbs"]
+
+[node name="Area2D" type="Area2D"]
+collision_layer = 4
+script = ExtResource("1_mrsbs")

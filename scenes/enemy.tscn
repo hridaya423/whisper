@@ -1,0 +1,23 @@
+[gd_scene load_steps=6 format=3 uid="uid://c2s1bo57fwo8b"]
+
+[ext_resource type="Script" uid="uid://bkyg7allpt41n" path="res://scripts/Enemy.gd" id="1_md0e3"]
+[ext_resource type="PackedScene" uid="uid://daf8bihhl8kig" path="res://scenes/DarkProjectile.tscn" id="2_c4w8v"]
+[ext_resource type="Texture2D" uid="uid://26g08uoat068" path="res://assets/sprites/enemy1.png" id="2_md0e3"]
+[ext_resource type="AudioStream" uid="uid://cl33agu6n7edq" path="res://assets/sfx/Dark_magical_project-1756587295400.mp3" id="3_c4w8v"]
+[ext_resource type="AudioStream" uid="uid://bdp2lyev1ly7s" path="res://assets/sfx/death.mp3" id="4_xwavj"]
+
+[node name="Enemy" type="CharacterBody2D"]
+collision_layer = 3
+script = ExtResource("1_md0e3")
+dark_projectile_scene = ExtResource("2_c4w8v")
+
+[node name="AttackAudio" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("3_c4w8v")
+
+[node name="DeathAudio" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("4_xwavj")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(-1.52588e-05, 1.52588e-05)
+scale = Vector2(0.33, 0.33)
+texture = ExtResource("2_md0e3")

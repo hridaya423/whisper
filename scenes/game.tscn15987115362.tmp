@@ -1,0 +1,101 @@
+[gd_scene load_steps=16 format=4 uid="uid://kwtk3huoscm5"]
+
+[ext_resource type="PackedScene" uid="uid://bkj3efqmuws2y" path="res://scenes/player/Player.tscn" id="1_uwrxv"]
+[ext_resource type="Texture2D" uid="uid://xwt5qapegddp" path="res://images.png" id="2_yqjtg"]
+[ext_resource type="Script" uid="uid://drcrdk2px3jpl" path="res://scripts/GameManager.gd" id="3_lnu2h"]
+[ext_resource type="Script" uid="uid://5tqcoil2dlb2" path="res://scripts/SonarSystem.gd" id="4_lbhrr"]
+[ext_resource type="FontFile" uid="uid://crsyfbiou73cv" path="res://assets/fonts/Federant-Regular.ttf" id="5_iywne"]
+[ext_resource type="Texture2D" uid="uid://7nfunsjysvf7" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_e.svg" id="6_p57ef"]
+[ext_resource type="Texture2D" uid="uid://balg01hgr78km" path="res://assets/sprites/rune_longersonar.png" id="7_gee14"]
+[ext_resource type="Script" uid="uid://cpie88oaaixuq" path="res://scripts/RuneSystem.gd" id="7_u5sy4"]
+[ext_resource type="Script" uid="uid://vmn7tesl7qfk" path="res://scripts/RunePickup.gd" id="8_0tnpc"]
+[ext_resource type="PackedScene" uid="uid://b4b2ndeorm700" path="res://scenes/EnemySpawner.tscn" id="10_vtaks"]
+[ext_resource type="PackedScene" uid="uid://c2s1bo57fwo8b" path="res://scenes/enemy.tscn" id="11_kvpfn"]
+[ext_resource type="Script" uid="uid://casxmatuvwuxq" path="res://scripts/LevelManager.gd" id="12_dinhu"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_lbhrr"]
+font = ExtResource("5_iywne")
+font_size = 24
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_lnu2h"]
+resource_name = "<null>"
+texture = ExtResource("2_yqjtg")
+0:0/next_alternative_id = 2
+0:0/0 = 0
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+1:0/0 = 0
+1:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+0:1/0 = 0
+0:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+1:1/0 = 0
+1:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+
+[sub_resource type="TileSet" id="TileSet_yqjtg"]
+physics_layer_0/collision_layer = 1
+navigation_layer_0/layers = 1
+sources/2 = SubResource("TileSetAtlasSource_lnu2h")
+
+[node name="Main" type="Node2D"]
+
+[node name="GameManager" type="Node2D" parent="."]
+scale = Vector2(1, 1.02816)
+script = ExtResource("3_lnu2h")
+
+[node name="SonarSystem" type="Node2D" parent="."]
+scale = Vector2(1, 1.02816)
+script = ExtResource("4_lbhrr")
+
+[node name="Label" type="Label" parent="."]
+offset_left = -47.0
+offset_top = -85.0
+offset_right = 79.0
+offset_bottom = -55.0
+scale = Vector2(1, 1.02816)
+text = "Press"
+label_settings = SubResource("LabelSettings_lbhrr")
+metadata/_edit_use_anchors_ = true
+
+[node name="KeyboardE" type="Sprite2D" parent="."]
+position = Vector2(30, -69)
+scale = Vector2(0.492187, 0.492187)
+texture = ExtResource("6_p57ef")
+
+[node name="Node2D" type="Node2D" parent="."]
+
+[node name="DurationRune" type="Sprite2D" parent="Node2D"]
+position = Vector2(1527, 40)
+scale = Vector2(0.148437, 0.148437)
+texture = ExtResource("7_gee14")
+script = ExtResource("8_0tnpc")
+rune_type = 1
+
+[node name="RuneSystem" type="Node" parent="."]
+script = ExtResource("7_u5sy4")
+metadata/_custom_type_script = "uid://cpie88oaaixuq"
+
+[node name="EnemySpawner" parent="." instance=ExtResource("10_vtaks")]
+position = Vector2(2059, 212)
+scale = Vector2(-1.2176, 1.6792)
+enemy_scene = ExtResource("11_kvpfn")
+spawn_interval = null
+max_enemies = null
+spawn_distance_from_player = null
+spawn_height_offset = null
+
+[node name="TileMapLayer" type="TileMapLayer" parent="."]
+scale = Vector2(1, 1.02816)
+tile_map_data = PackedByteArray("AABkAAUAAgABAAAAAABlAAUAAgABAAAAAABmAAUAAgABAAAAAABnAAUAAgABAAAAAAB0AAoAAgABAAAAAAB1AAoAAgABAAAAAAB2AAoAAgABAAAAAAB5AAwAAgABAAAAAAB6AAwAAgABAAAAAAB7AAwAAgABAAAAAAB8AAwAAgABAAAAAAB+AA4AAgABAAAAAAB/AA4AAgABAAAAAACAAA4AAgABAAAAAACBAA4AAgABAAAAAACCAA4AAgABAAAAAACDAA4AAgABAAAAAACEAA4AAgABAAAAAACFAA4AAgABAAAAAACGAA4AAgABAAAAAACHAA4AAgABAAAAAACIAA4AAgABAAAAAACKAAsAAgABAAAAAACLAAsAAgABAAAAAACMAAsAAgABAAAAAACNAAsAAgABAAAAAACOAAsAAgABAAAAAACQAAkAAgABAAAAAACRAAkAAgABAAAAAACSAAkAAgABAAAAAACTAAkAAgABAAAAAACUAAkAAgABAAAAAACWAAcAAgABAAAAAACXAAcAAgABAAAAAACYAAcAAgABAAAAAACZAAcAAgABAAAAAACbAAUAAgABAAAAAACcAAUAAgABAAAAAACeAAMAAgABAAAAAACeAAgAAgABAAAAAACfAAgAAgABAAAAAACiAAUAAgABAAAAAACjAAUAAgABAAAAAACkAAUAAgABAAAAAAChAAIAAgABAAAAAACkAAMAAgABAAAAAAClAAMAAgABAAAAAACmAAMAAgABAAAAAACnAAMAAgABAAAAAACpAAUAAgABAAAAAACqAAUAAgABAAAAAACrAAUAAgABAAAAAACtAAMAAgABAAAAAACuAAMAAgABAAAAAACvAAMAAgABAAAAAABvAAoAAgAAAAEAAABwAAoAAgAAAAEAAABxAAoAAgAAAAEAAACxAAUAAgAAAAEAAACyAAUAAgAAAAEAAACzAAUAAgAAAAEAAAC0AAUAAgAAAAEAAAC2AAgAAgAAAAEAAAC3AAgAAgAAAAEAAAC4AAgAAgAAAAEAAAC5AAgAAgAAAAEAAAC6AAgAAgAAAAEAAAC8AAoAAgAAAAEAAAC9AAoAAgAAAAEAAAC+AAoAAgAAAAEAAAC/AAoAAgAAAAEAAADAAAoAAgAAAAEAAADCAAcAAgAAAAEAAADCAAgAAgAAAAEAAADCAAkAAgAAAAEA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")
+tile_set = SubResource("TileSet_yqjtg")
+
+[node name="Player" parent="." instance=ExtResource("1_uwrxv")]
+position = Vector2(-1, 0)
+scale = Vector2(1, 1.02816)
+
+[node name="Camera2D" type="Camera2D" parent="Player" groups=["level_manager"]]
+zoom = Vector2(3, 3)
+position_smoothing_enabled = true
+
+[node name="LevelManager" type="Node2D" parent="."]
+script = ExtResource("12_dinhu")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]

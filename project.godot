@@ -11,14 +11,21 @@ config_version=5
 [application]
 
 config/name="Whisper"
+config/description="A platformer set in total darkness where every sonar ping reveals the path forward but each pulse reshapes the world and awakens lurking enemies. Will you risk the noise, or stumble blind into the void?"
+config/version="v0.1"
 run/main_scene="uid://yc5suhfsegqr"
 config/features=PackedStringArray("4.4", "Forward Plus")
-config/icon="res://icon.svg"
+config/icon="uid://cd18mqm3d2fg0"
+
+[audio]
+
+general/default_playback_type.web=0
 
 [display]
 
 window/stretch/mode="viewport"
 
-[editor_plugins]
+[layer_names]
 
-enabled=PackedStringArray("res://addons/godot_super-wakatime/plugin.cfg")
+2d_physics/layer_1="Enemy"
+2d_navigation/layer_1="Enemy"

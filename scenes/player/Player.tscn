@@ -1,23 +1,26 @@
-[gd_scene load_steps=5 format=3 uid="uid://bkj3efqmuws2y"]
+[gd_scene load_steps=9 format=3 uid="uid://bkj3efqmuws2y"]
 
 [ext_resource type="Script" uid="uid://ducs7e4bnoqup" path="res://scripts/Player.gd" id="1_wr5hl"]
-[ext_resource type="AudioStream" uid="uid://3rkxilttv8ds" path="res://assets/sfx/footstep.mp3" id="2_524rm"]
+[ext_resource type="AudioStream" uid="uid://c3geth4hdfxa3" path="res://assets/sfx/footstep.mp3" id="2_524rm"]
+[ext_resource type="PackedScene" uid="uid://bll8ibtgn4r4t" path="res://scenes/LightProjectile.tscn" id="2_tpg5x"]
+[ext_resource type="Texture2D" uid="uid://cxku2pvg7387o" path="res://assets/sprites/player.png" id="3_c3xxp"]
 [ext_resource type="AudioStream" uid="uid://jgqxt66qsypg" path="res://assets/sfx/sonar.mp3" id="3_tpg5x"]
+[ext_resource type="AudioStream" uid="uid://cl3ktkynxd6u5" path="res://assets/sfx/jump.mp3" id="5_tpg5x"]
+[ext_resource type="AudioStream" uid="uid://cj22c71ni60i3" path="res://assets/sfx/playerattack.mp3" id="7_npwbq"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_o8nba"]
 size = Vector2(16, 32)
 
 [node name="Player" type="CharacterBody2D"]
 script = ExtResource("1_wr5hl")
+light_projectile_scene = ExtResource("2_tpg5x")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_o8nba")
 
-[node name="ColorRect" type="ColorRect" parent="."]
-offset_left = -8.0
-offset_top = -17.0
-offset_right = 8.0
-offset_bottom = 16.0
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.335938, 0.335938)
+texture = ExtResource("3_c3xxp")
 
 [node name="SonarVisual" type="Node2D" parent="."]
 
@@ -29,3 +32,9 @@ volume_db = 10.0
 stream = ExtResource("3_tpg5x")
 volume_db = 4.0
 pitch_scale = 0.8
+
+[node name="LandingAudio" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("5_tpg5x")
+
+[node name="AttackAudio" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("7_npwbq")

@@ -2,20 +2,24 @@ extends Node2D
 
 var is_glowing = false
 var glow_timer = 0.0
-var glow_duration = 2 
+var base_glow_duration = 2.0
+var glow_duration = 2.0  
 var glow_color = Color(1.0, 1.0, 1.0, 1.0)
 var sonar_position = Vector2.ZERO
+var base_sonar_range = 150.0
 var sonar_range = 150.0
 var sonar_direction = Vector2.RIGHT
 var sonar_cone_angle = 90.0
 
 var tilemap_layer: TileMapLayer
-var platform_edges = [] 
+var platform_edges = []
+var rune_system: RuneSystem
 
 const TILE_SIZE = 16
 
 func _ready():
 	tilemap_layer = get_node("../TileMapLayer")
+	rune_system = get_node("../RuneSystem")
 	z_index = 1000
 	
 	if tilemap_layer:
@@ -132,8 +136,15 @@ func _draw_slim_line(start: Vector2, end: Vector2, alpha: float):
 	draw_line(start, end, glow_color_bright, 3.5)
 
 func _on_sonar_pulse(position: Vector2, range: float, direction: Vector2):
+	if rune_system:
+		sonar_range = base_sonar_range * rune_system.get_range_multiplier()
+		glow_duration = base_glow_duration * rune_system.get_duration_multiplier()
+		print("Sonar with runes - Range: ", sonar_range, ", Duration: ", glow_duration)
+	else:
+		sonar_range = base_sonar_range
+		glow_duration = base_glow_duration
+	
 	is_glowing = true
 	glow_timer = glow_duration
 	sonar_position = position
-	sonar_range = range
 	sonar_direction = direction.normalized()
