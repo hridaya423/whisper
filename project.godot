@@ -27,6 +27,10 @@ general/default_playback_type.web=0
 
 window/stretch/mode="viewport"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_super-wakatime/plugin.cfg")
+
 [layer_names]
 
 2d_physics/layer_1="Enemy"

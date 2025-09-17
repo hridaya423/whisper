@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=4 uid="uid://kwtk3huoscm5"]
+[gd_scene load_steps=19 format=4 uid="uid://kwtk3huoscm5"]
 
 [ext_resource type="PackedScene" uid="uid://bkj3efqmuws2y" path="res://scenes/player/Player.tscn" id="1_uwrxv"]
 [ext_resource type="Texture2D" uid="uid://xwt5qapegddp" path="res://images.png" id="2_yqjtg"]
@@ -7,10 +7,11 @@
 [ext_resource type="FontFile" uid="uid://crsyfbiou73cv" path="res://assets/fonts/Federant-Regular.ttf" id="5_iywne"]
 [ext_resource type="Texture2D" uid="uid://7nfunsjysvf7" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_e.svg" id="6_p57ef"]
 [ext_resource type="Texture2D" uid="uid://balg01hgr78km" path="res://assets/sprites/rune_longersonar.png" id="7_gee14"]
+[ext_resource type="PackedScene" uid="uid://c2s1bo57fwo8b" path="res://scenes/enemy.tscn" id="7_ir15t"]
 [ext_resource type="Script" uid="uid://cpie88oaaixuq" path="res://scripts/RuneSystem.gd" id="7_u5sy4"]
 [ext_resource type="Script" uid="uid://vmn7tesl7qfk" path="res://scripts/RunePickup.gd" id="8_0tnpc"]
+[ext_resource type="PackedScene" uid="uid://r58u4ch1i6vh" path="res://scenes/enemy2.tscn" id="8_ca42v"]
 [ext_resource type="PackedScene" uid="uid://b4b2ndeorm700" path="res://scenes/EnemySpawner.tscn" id="10_vtaks"]
-[ext_resource type="PackedScene" uid="uid://c2s1bo57fwo8b" path="res://scenes/enemy.tscn" id="11_kvpfn"]
 [ext_resource type="Script" uid="uid://casxmatuvwuxq" path="res://scripts/LevelManager.gd" id="12_dinhu"]
 [ext_resource type="Texture2D" uid="uid://ylhfwmkxo8b4" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_g.svg" id="13_kvuet"]
 [ext_resource type="Texture2D" uid="uid://cjwg2h28nn38l" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_q_outline.svg" id="14_trtic"]
@@ -61,7 +62,8 @@ metadata/_custom_type_script = "uid://cpie88oaaixuq"
 [node name="EnemySpawner" parent="." instance=ExtResource("10_vtaks")]
 position = Vector2(2059, 212)
 scale = Vector2(-1.2176, 1.6792)
-enemy_scene = ExtResource("11_kvpfn")
+hover_enemy_scene = ExtResource("7_ir15t")
+ground_enemy_scene = ExtResource("8_ca42v")
 
 [node name="TileMapLayer" type="TileMapLayer" parent="."]
 scale = Vector2(1, 1.02816)
@@ -79,11 +81,12 @@ position_smoothing_enabled = true
 [node name="LevelManager" type="Node2D" parent="."]
 script = ExtResource("12_dinhu")
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
-
 [node name="prompts" type="Node" parent="."]
 
 [node name="Label" type="Label" parent="prompts"]
+anchors_preset = -1
+anchor_top = -0.00462963
+anchor_bottom = -0.00462963
 offset_left = -47.0
 offset_top = -85.0
 offset_right = 79.0
@@ -94,7 +97,7 @@ label_settings = SubResource("LabelSettings_lbhrr")
 metadata/_edit_use_anchors_ = true
 
 [node name="KeyboardE" type="Sprite2D" parent="prompts"]
-position = Vector2(6, -73)
+position = Vector2(6, -78)
 scale = Vector2(0.433593, 0.433593)
 texture = ExtResource("6_p57ef")
 
@@ -132,3 +135,5 @@ metadata/_edit_use_anchors_ = true
 position = Vector2(1276, -17)
 scale = Vector2(0.453125, 0.453125)
 texture = ExtResource("14_trtic")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]

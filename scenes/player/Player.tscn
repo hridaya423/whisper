@@ -21,6 +21,7 @@ shape = SubResource("RectangleShape2D_o8nba")
 [node name="Sprite2D" type="Sprite2D" parent="."]
 scale = Vector2(0.335938, 0.335938)
 texture = ExtResource("3_c3xxp")
+flip_h = true
 
 [node name="SonarVisual" type="Node2D" parent="."]
 
