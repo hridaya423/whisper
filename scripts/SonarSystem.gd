@@ -3,7 +3,7 @@ extends Node2D
 var is_glowing = false
 var glow_timer = 0.0
 var base_glow_duration = 2.0
-var glow_duration = 2.0  
+var glow_duration = 2.0
 var glow_color = Color(1.0, 1.0, 1.0, 1.0)
 var sonar_position = Vector2.ZERO
 var base_sonar_range = 150.0
@@ -18,16 +18,29 @@ var tilemap_layer: TileMapLayer
 var platform_edges = []
 var rune_system: RuneSystem
 
+
+var camera: Camera2D
+var player: CharacterBody2D
+var camera_following_wave = false
+var original_camera_position: Vector2
+var camera_follow_tween: Tween
+
 const TILE_SIZE = 16
 
 func _ready():
 	tilemap_layer = get_node("../TileMapLayer")
 	rune_system = get_node("../RuneSystem")
+
+
+	player = get_node("../Player")
+	if player:
+		camera = player.get_node("Camera2D")
+
 	z_index = 1000
-	
+
 	if tilemap_layer:
 		tilemap_layer.visible = false
-		
+
 	_calculate_platform_edges()
 
 func _process(delta):
@@ -51,50 +64,50 @@ func _draw():
 
 func _calculate_platform_edges():
 	platform_edges.clear()
-	
+
 	if not tilemap_layer:
 		return
-	
+
 	var used_rect = tilemap_layer.get_used_rect()
-	
+
 	for x in range(used_rect.position.x, used_rect.position.x + used_rect.size.x):
 		for y in range(used_rect.position.y, used_rect.position.y + used_rect.size.y):
 			var tile_pos = Vector2i(x, y)
-			
+
 			if tilemap_layer.get_cell_source_id(tile_pos) == -1:
 				continue
-			
+
 			var world_pos = tilemap_layer.map_to_local(tile_pos)
 			var half_tile = TILE_SIZE / 2.0
 			var neighbors = [
 				Vector2i(x, y - 1),
-				Vector2i(x + 1, y),  
+				Vector2i(x + 1, y),
 				Vector2i(x, y + 1),
 				Vector2i(x - 1, y)
 			]
-			
+
 			var edge_lines = [
-				{"start": Vector2(world_pos.x - half_tile, world_pos.y - half_tile), 
+				{"start": Vector2(world_pos.x - half_tile, world_pos.y - half_tile),
 				 "end": Vector2(world_pos.x + half_tile, world_pos.y - half_tile)},
-				{"start": Vector2(world_pos.x + half_tile, world_pos.y - half_tile), 
+				{"start": Vector2(world_pos.x + half_tile, world_pos.y - half_tile),
 				 "end": Vector2(world_pos.x + half_tile, world_pos.y + half_tile)},
-				{"start": Vector2(world_pos.x + half_tile, world_pos.y + half_tile), 
+				{"start": Vector2(world_pos.x + half_tile, world_pos.y + half_tile),
 				 "end": Vector2(world_pos.x - half_tile, world_pos.y + half_tile)},
-				{"start": Vector2(world_pos.x - half_tile, world_pos.y + half_tile), 
+				{"start": Vector2(world_pos.x - half_tile, world_pos.y + half_tile),
 				 "end": Vector2(world_pos.x - half_tile, world_pos.y - half_tile)}
 			]
-			
+
 			for i in range(4):
 				var neighbor_pos = neighbors[i]
 				var neighbor_has_tile = tilemap_layer.get_cell_source_id(neighbor_pos) != -1
-				
+
 				if not neighbor_has_tile:
 					platform_edges.append(edge_lines[i])
 
 func _calculate_fast_wave(distance: float, wave_radius: float) -> float:
 	var wave_thickness = 50.0
 	var distance_to_wave = abs(distance - wave_radius)
-	
+
 	if distance_to_wave < wave_thickness:
 		var intensity = 1.0 - (distance_to_wave / wave_thickness)
 		return 0.7 + intensity * 0.3
@@ -114,9 +127,9 @@ func _update_wave_rings(delta: float):
 
 		if not ring.active:
 			ring.active = true
-			
+
 		ring.radius += ring.speed * delta
-		
+
 		var progress = ring.radius / ring.max_radius
 		ring.alpha = 1.0 - progress
 
@@ -226,6 +239,11 @@ func _on_sonar_pulse(position: Vector2, range: float, direction: Vector2):
 	sonar_position = position
 	sonar_direction = direction.normalized()
 
+
+	var range_multiplier = rune_system.get_range_multiplier() if rune_system else 1.0
+	if range_multiplier > 1.3 and camera and player:
+		_start_camera_wave_follow()
+
 	wave_rings.clear()
 	highlighted_edges.clear()
 	for i in range(max_wave_rings):
@@ -238,3 +256,57 @@ func _on_sonar_pulse(position: Vector2, range: float, direction: Vector2):
 			"active": false
 		}
 		wave_rings.append(ring)
+
+func _start_camera_wave_follow():
+	if camera_following_wave:
+		return
+
+	camera_following_wave = true
+	original_camera_position = camera.global_position
+
+
+	_follow_wave_expansion()
+
+func _follow_wave_expansion():
+	if not camera_following_wave:
+		return
+
+
+	var furthest_ring_radius = 0.0
+	for ring in wave_rings:
+		if ring.active and ring.radius > furthest_ring_radius:
+			furthest_ring_radius = ring.radius
+
+
+	var wave_front_offset = sonar_direction * furthest_ring_radius * 0.7
+	var target_position = sonar_position + wave_front_offset
+
+
+	if camera_follow_tween:
+		camera_follow_tween.kill()
+
+	camera_follow_tween = create_tween()
+	camera_follow_tween.tween_property(camera, "global_position", target_position, 0.3)
+
+
+	if furthest_ring_radius >= sonar_range * 0.95:
+
+		await get_tree().create_timer(1.0).timeout
+		_return_camera_to_player()
+	else:
+
+		await get_tree().create_timer(0.1).timeout
+		_follow_wave_expansion()
+
+func _return_camera_to_player():
+	if not camera_following_wave:
+		return
+
+	camera_following_wave = false
+
+	if camera_follow_tween:
+		camera_follow_tween.kill()
+
+
+	camera_follow_tween = create_tween()
+	camera_follow_tween.tween_property(camera, "global_position", player.global_position, 0.8)

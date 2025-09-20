@@ -3,7 +3,7 @@ class_name Player
 
 const SPEED = 200.0
 const JUMP_VELOCITY = -400.0
-const SONAR_COOLDOWN = 1.0
+const SONAR_COOLDOWN = 2.0
 const SONAR_RANGE = 150.0
 const MIN_LANDING_VELOCITY = 150.0
 const ATTACK_COOLDOWN = 0.5
@@ -21,7 +21,7 @@ var facing_direction = Vector2.RIGHT
 var sonar_direction = Vector2.RIGHT
 var is_aiming_mode = false
 var was_aiming_last_frame = false
-var stored_aim_direction = Vector2.RIGHT 
+var stored_aim_direction = Vector2.RIGHT
 var gravity = ProjectSettings.get_setting("physics/2d/default_gravity")
 var death_plane_y = 1000
 var footstep_timer = 0.0
@@ -33,6 +33,14 @@ var health_ui_layer: CanvasLayer
 var health_bar_background: ColorRect
 var health_bar_fill: ColorRect
 var health_label: Label
+
+var rune_ui_container: Control
+var rune_slots: Array[TextureRect] = []
+var rune_labels: Array[Label] = []
+var rune_timers: Array[Label] = []
+
+
+var rune_key_pressed = [false, false, false]
 
 @export var light_projectile_scene: PackedScene
 
@@ -63,11 +71,19 @@ signal player_died
 func _ready():
 	z_index = 101
 	add_to_group("player")
-	var game_manager = get_node("../GameManager")
-	if game_manager:
-		sonar_pulse_emitted.connect(game_manager._on_player_sonar_pulse)
+	var game_manager = get_node_or_null("../GameManager")
+	if game_manager and game_manager.has_method("_on_player_sonar_pulse"):
+		sonar_pulse_emitted.connect(Callable(game_manager, "_on_player_sonar_pulse"))
+
+	var rune_system = get_node("../RuneSystem")
+	if rune_system:
+		rune_system.rune_activated.connect(_on_rune_changed)
+		rune_system.rune_deactivated.connect(_on_rune_changed)
+		rune_system.rune_inventory_updated.connect(_update_rune_ui)
+
 	_setup_health_ui()
 	_update_health_ui()
+	_update_rune_ui()
 
 func _setup_health_ui():
 	health_ui_layer = CanvasLayer.new()
@@ -93,6 +109,67 @@ func _setup_health_ui():
 	health_bar_fill.size = Vector2(156, 20)
 	health_bar_fill.color = Color(0.6, 0.05, 0.05)
 	health_container.add_child(health_bar_fill)
+
+	rune_ui_container = Control.new()
+	rune_ui_container.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	rune_ui_container.position = Vector2(-180, -60)
+	rune_ui_container.size = Vector2(160, 50)
+	health_ui_layer.add_child(rune_ui_container)
+
+	for i in range(3):
+		var slot_container = Control.new()
+		slot_container.position = Vector2(i * 50, 0)
+		slot_container.size = Vector2(45, 45)
+		rune_ui_container.add_child(slot_container)
+
+		var slot_bg = ColorRect.new()
+		slot_bg.position = Vector2(0, 0)
+		slot_bg.size = Vector2(45, 45)
+		slot_bg.color = Color(0.1, 0.1, 0.15, 0.8)
+		slot_container.add_child(slot_bg)
+
+		var slot_border = ColorRect.new()
+		slot_border.position = Vector2(-2, -2)
+		slot_border.size = Vector2(49, 49)
+		slot_border.color = Color(0.3, 0.3, 0.4, 0.9)
+		slot_container.add_child(slot_border)
+		slot_container.move_child(slot_border, 0)
+
+
+		var rune_sprite = TextureRect.new()
+		rune_sprite.position = Vector2(2, 2)
+		rune_sprite.size = Vector2(41, 41)
+		rune_sprite.texture = load("res://assets/sprites/rune_longersonar.png")
+		rune_sprite.modulate = Color(1, 1, 1, 0)
+		rune_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rune_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		rune_sprite.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		slot_container.add_child(rune_sprite)
+		rune_slots.append(rune_sprite)
+
+
+		var key_label = Label.new()
+		key_label.text = str(i + 1)
+		key_label.position = Vector2(15, 38)
+		key_label.size = Vector2(15, 10)
+		key_label.add_theme_font_size_override("font_size", 10)
+		key_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+		key_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		key_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		slot_container.add_child(key_label)
+		rune_labels.append(key_label)
+
+
+		var timer_label = Label.new()
+		timer_label.text = ""
+		timer_label.position = Vector2(30, 2)
+		timer_label.size = Vector2(12, 8)
+		timer_label.add_theme_font_size_override("font_size", 8)
+		timer_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.8))
+		timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		slot_container.add_child(timer_label)
+		rune_timers.append(timer_label)
 
 func _update_health_ui():
 	if not health_bar_fill:
@@ -131,6 +208,9 @@ func _physics_process(delta):
 		attack_timer -= delta
 		if attack_timer <= 0:
 			can_attack = true
+
+
+	_update_rune_ui()
 	if invulnerable:
 		invulnerable_timer -= delta
 		if invulnerable_timer <= 0:
@@ -156,7 +236,7 @@ func _physics_process(delta):
 	elif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and is_aiming_mode:
 		sonar_input = true
 	elif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not is_aiming_mode:
-		sonar_input = true 
+		sonar_input = true
 	elif right_click_released:
 		sonar_input = true
 		use_stored_direction = true
@@ -173,6 +253,28 @@ func _physics_process(delta):
 	was_aiming_last_frame = is_aiming_mode
 	if Input.is_key_pressed(KEY_Q) and can_attack:
 		shoot_light_projectile()
+
+
+	if Input.is_action_just_pressed("ui_accept"):
+		_drop_rune()
+
+
+	var key_1_pressed = Input.is_physical_key_pressed(KEY_1)
+	var key_2_pressed = Input.is_physical_key_pressed(KEY_2)
+	var key_3_pressed = Input.is_physical_key_pressed(KEY_3)
+
+	if key_1_pressed and not rune_key_pressed[0]:
+		_activate_rune_slot(0)
+	elif key_2_pressed and not rune_key_pressed[1]:
+		_activate_rune_slot(1)
+	elif key_3_pressed and not rune_key_pressed[2]:
+		_activate_rune_slot(2)
+
+
+	rune_key_pressed[0] = key_1_pressed
+	rune_key_pressed[1] = key_2_pressed
+	rune_key_pressed[2] = key_3_pressed
+
 	var direction = 0
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
 		direction = -1
@@ -298,9 +400,22 @@ func emit_sonar_pulse():
 	if !can_sonar:
 		return
 	can_sonar = false
-	sonar_timer = SONAR_COOLDOWN
+
+
+	var rune_system = get_node("../RuneSystem")
+	var cooldown = SONAR_COOLDOWN
+	if rune_system:
+		cooldown *= rune_system.get_cooldown_multiplier()
+
+	sonar_timer = cooldown
 	play_sonar_sound()
-	sonar_pulse_emitted.emit(global_position, SONAR_RANGE, sonar_direction)
+
+
+	var sonar_range = SONAR_RANGE
+	if rune_system:
+		sonar_range *= rune_system.get_range_multiplier()
+
+	sonar_pulse_emitted.emit(global_position, sonar_range, sonar_direction)
 
 func shoot_light_projectile():
 	if !can_attack or !light_projectile_scene:
@@ -382,3 +497,168 @@ func set_max_health(new_max: int):
 	MAX_HEALTH = new_max
 	health = int(old_percentage * MAX_HEALTH)
 	_update_health_ui()
+
+func _activate_rune_slot(slot_index: int):
+	var rune_system = get_node("../RuneSystem")
+	if not rune_system:
+		return
+
+	var active_runes = rune_system.get_active_runes()
+	var inventory = rune_system.get_inventory()
+	var cooldowns = rune_system.get_rune_cooldowns()
+
+
+	if slot_index < active_runes.size() and active_runes[slot_index] != null:
+		var result = rune_system.deactivate_rune(slot_index)
+		return
+
+
+	var rune_type_to_activate = _find_best_rune_for_slot(slot_index, inventory, cooldowns)
+
+	if rune_type_to_activate == null:
+		return
+
+	var result = rune_system.activate_rune(slot_index, rune_type_to_activate)
+
+	var updated_active_runes = rune_system.get_active_runes()
+	
+
+func _find_best_rune_for_slot(slot_index: int, inventory: Dictionary, cooldowns: Dictionary):
+
+
+	var all_types = [RuneSystem.RuneType.RANGE_AMPLIFIER, RuneSystem.RuneType.DURATION_CRYSTAL, RuneSystem.RuneType.RAPID_PULSE]
+
+	for rune_type in all_types:
+		if inventory.has(rune_type) and inventory[rune_type] > 0:
+			if not cooldowns.has(rune_type):
+				return rune_type
+	return null
+
+func _drop_rune():
+	var rune_system = get_node("../RuneSystem")
+	if rune_system:
+		var success = rune_system.drop_rune()
+		
+
+
+func _update_rune_ui():
+	var rune_system = get_node("../RuneSystem")
+	if not rune_system or rune_slots.size() != 3:
+		return
+
+	var active_runes = rune_system.get_active_runes()
+	var inventory = rune_system.get_inventory()
+	var cooldowns = rune_system.get_rune_cooldowns()
+	var timers = rune_system.get_active_rune_timers()
+
+	var has_any_runes = (inventory.size() > 0) or (active_runes.filter(func(r): return r != null).size() > 0)
+	rune_ui_container.visible = has_any_runes
+
+	var base_rune_colors = {
+		RuneSystem.RuneType.RANGE_AMPLIFIER: Color(1.2, 0.6, 0.6),
+		RuneSystem.RuneType.DURATION_CRYSTAL: Color(0.6, 1.2, 0.6),
+		RuneSystem.RuneType.RAPID_PULSE: Color(0.6, 0.6, 1.2)
+	}
+
+
+	var slot_assignments = _calculate_slot_assignments(active_runes, inventory, cooldowns)
+
+	for i in range(3):
+		var slot_container = rune_slots[i].get_parent()
+		slot_container.visible = has_any_runes
+
+		if not has_any_runes:
+			continue
+
+		var slot_data = slot_assignments[i]
+		var display_type = slot_data.type
+		var rune_type = slot_data.rune_type
+		var count = slot_data.count
+
+		match display_type:
+			"active":
+
+				var base_color = base_rune_colors.get(rune_type, Color.WHITE)
+				var time_remaining = timers[i] if i < timers.size() else 0.0
+
+				if time_remaining > 0:
+
+					var time_percentage = time_remaining / 30.0
+					var fade_color = base_color.lerp(Color(0.5, 0.5, 0.5), 1.0 - time_percentage)
+					rune_slots[i].modulate = fade_color
+					rune_labels[i].text = str(int(time_remaining) + 1) + "s"
+
+
+					if time_remaining < 5:
+						rune_labels[i].add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+					elif time_remaining < 10:
+						rune_labels[i].add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
+					else:
+						rune_labels[i].add_theme_color_override("font_color", Color.WHITE)
+				else:
+
+					rune_slots[i].modulate = base_color
+					rune_labels[i].text = "ON"
+					rune_labels[i].add_theme_color_override("font_color", Color.WHITE)
+
+			"available":
+
+				var base_color = base_rune_colors.get(rune_type, Color.WHITE)
+				rune_slots[i].modulate = base_color * 0.4
+				rune_labels[i].text = str(i + 1)
+				rune_labels[i].add_theme_color_override("font_color", Color(0.8, 0.8, 0.9))
+
+			"cooldown":
+
+				rune_slots[i].modulate = Color(0.8, 0.4, 0.4, 0.6)
+				var cd_time = cooldowns.get(rune_type, 0.0)
+				rune_labels[i].text = str(int(cd_time) + 1) + "s"
+				rune_labels[i].add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
+
+			"empty":
+
+				rune_slots[i].modulate = Color(1, 1, 1, 0)
+				rune_labels[i].text = str(i + 1)
+				rune_labels[i].add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+
+func _calculate_slot_assignments(active_runes: Array, inventory: Dictionary, cooldowns: Dictionary) -> Array:
+	var assignments = []
+	var assigned_runes = {}
+	for i in range(3):
+		var slot_data = {"type": "empty", "rune_type": null, "count": 0}
+
+		if i < active_runes.size() and active_runes[i] != null:
+			slot_data.type = "active"
+			slot_data.rune_type = active_runes[i]
+			assigned_runes[active_runes[i]] = true
+
+		assignments.append(slot_data)
+
+
+	var inventory_keys = inventory.keys()
+	var key_index = 0
+
+	for i in range(3):
+		if assignments[i].type == "empty":
+
+			while key_index < inventory_keys.size():
+				var rune_type = inventory_keys[key_index]
+				key_index += 1
+
+				if inventory[rune_type] > 0 and not assigned_runes.has(rune_type):
+					assigned_runes[rune_type] = true
+
+					if cooldowns.has(rune_type):
+						assignments[i].type = "cooldown"
+						assignments[i].rune_type = rune_type
+					else:
+						assignments[i].type = "available"
+						assignments[i].rune_type = rune_type
+						assignments[i].count = inventory[rune_type]
+						
+					break
+
+	return assignments
+
+func _on_rune_changed(slot: int, rune_type):
+	_update_rune_ui()
