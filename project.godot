@@ -23,6 +23,11 @@ config/icon="uid://cd18mqm3d2fg0"
 
 general/default_playback_type.web=0
 
+[autoload]
+
+SettingsManager="*res://scripts/SettingsManager.gd"
+FpsOverlay="*res://scripts/ui/FpsOverlay.gd"
+
 [display]
 
 window/stretch/mode="viewport"

@@ -50,7 +50,7 @@ script = ExtResource("4_lbhrr")
 [node name="Node2D" type="Node2D" parent="."]
 
 [node name="AmplifierRune" type="Sprite2D" parent="Node2D"]
-position = Vector2(-78, -2)
+position = Vector2(2861, 65)
 scale = Vector2(0.148437, 0.148437)
 texture = ExtResource("7_gee14")
 script = ExtResource("8_0tnpc")
@@ -141,7 +141,7 @@ texture = ExtResource("14_trtic")
 [node name="Node2D2" type="Node2D" parent="."]
 
 [node name="DurationRune" type="Sprite2D" parent="Node2D2"]
-position = Vector2(299, -46)
+position = Vector2(3731, 98)
 scale = Vector2(0.148437, 0.148437)
 texture = ExtResource("7_gee14")
 script = ExtResource("8_0tnpc")
@@ -149,16 +149,10 @@ rune_type = 1
 
 [node name="Node2D3" type="Node2D" parent="."]
 
-[node name="AmplifierRune" type="Sprite2D" parent="Node2D3"]
-position = Vector2(232, -0.999999)
-scale = Vector2(0.148437, 0.148437)
-texture = ExtResource("7_gee14")
-script = ExtResource("8_0tnpc")
-
 [node name="Node2D4" type="Node2D" parent="."]
 
 [node name="AmplifierRune" type="Sprite2D" parent="Node2D4"]
-position = Vector2(97, -8)
+position = Vector2(4453, 279)
 scale = Vector2(0.148437, 0.148437)
 texture = ExtResource("7_gee14")
 script = ExtResource("8_0tnpc")

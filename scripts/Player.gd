@@ -39,8 +39,8 @@ var rune_slots: Array[TextureRect] = []
 var rune_labels: Array[Label] = []
 var rune_timers: Array[Label] = []
 
-
-var rune_key_pressed = [false, false, false]
+var cooldown_ui_layer: CanvasLayer
+var sonar_cooldown_indicator: TextureProgressBar
 
 @export var light_projectile_scene: PackedScene
 
@@ -82,6 +82,7 @@ func _ready():
 		rune_system.rune_inventory_updated.connect(_update_rune_ui)
 
 	_setup_health_ui()
+	_setup_cooldown_ui()
 	_update_health_ui()
 	_update_rune_ui()
 
@@ -171,6 +172,61 @@ func _setup_health_ui():
 		slot_container.add_child(timer_label)
 		rune_timers.append(timer_label)
 
+func _setup_cooldown_ui():
+
+	cooldown_ui_layer = CanvasLayer.new()
+	cooldown_ui_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(cooldown_ui_layer)
+
+
+	var cooldown_container = VBoxContainer.new()
+	cooldown_container.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	cooldown_container.position = Vector2(5, 5)
+	cooldown_container.size = Vector2(60, 60)
+	cooldown_ui_layer.add_child(cooldown_container)
+
+
+	sonar_cooldown_indicator = TextureProgressBar.new()
+	sonar_cooldown_indicator.custom_minimum_size = Vector2(60, 60)
+	sonar_cooldown_indicator.size = Vector2(60, 60)
+	sonar_cooldown_indicator.min_value = 0.0
+	sonar_cooldown_indicator.max_value = 1.0
+	sonar_cooldown_indicator.value = 1.0
+	sonar_cooldown_indicator.fill_mode = TextureProgressBar.FILL_CLOCKWISE
+	sonar_cooldown_indicator.radial_initial_angle = -PI * 0.5
+	sonar_cooldown_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var wave_texture = load("res://assets/sprites/wave.png")
+	var scaled_wave_texture = _create_scaled_wave_texture(wave_texture, 60)
+
+
+	sonar_cooldown_indicator.texture_under = scaled_wave_texture
+	sonar_cooldown_indicator.texture_progress = scaled_wave_texture
+
+	cooldown_container.add_child(sonar_cooldown_indicator)
+
+func _create_scaled_wave_texture(original_texture: Texture2D, target_size: int) -> Texture2D:
+	var original_image = original_texture.get_image()
+	var scaled_image = Image.create(target_size, target_size, false, Image.FORMAT_RGBA8)
+	scaled_image.blit_rect_mask(original_image, original_image, Rect2i(0, 0, original_image.get_width(), original_image.get_height()), Vector2i(0, 0))
+	scaled_image.resize(target_size, target_size, Image.INTERPOLATE_LANCZOS)
+	return ImageTexture.create_from_image(scaled_image)
+
+
+func _update_cooldown_ui():
+	if not sonar_cooldown_indicator:
+		return
+
+	if can_sonar:
+
+		sonar_cooldown_indicator.value = 1.0
+		sonar_cooldown_indicator.modulate = Color(1.0, 1.0, 1.0, 1.0)
+	else:
+
+		var progress = 1.0 - (sonar_timer / SONAR_COOLDOWN)
+		sonar_cooldown_indicator.value = progress
+		sonar_cooldown_indicator.modulate = Color(0.5, 0.5, 0.5, 1.0)
+
 func _update_health_ui():
 	if not health_bar_fill:
 		return
@@ -211,6 +267,7 @@ func _physics_process(delta):
 
 
 	_update_rune_ui()
+	_update_cooldown_ui()
 	if invulnerable:
 		invulnerable_timer -= delta
 		if invulnerable_timer <= 0:
@@ -221,7 +278,7 @@ func _physics_process(delta):
 			modulate.a = 0.5 + abs(flash) * 0.5
 	if not is_on_floor():
 		velocity.y += gravity * delta
-	if (Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_W)) and is_on_floor():
+	if Input.is_action_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 
 	var right_click_released = was_aiming_last_frame and not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
@@ -229,15 +286,9 @@ func _physics_process(delta):
 		stored_aim_direction = sonar_direction
 
 	_update_sonar_direction()
-	var sonar_input = false
+	var sonar_input = Input.is_action_pressed("sonar")
 	var use_stored_direction = false
-	if Input.is_key_pressed(KEY_ENTER) or Input.is_key_pressed(KEY_E):
-		sonar_input = true
-	elif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and is_aiming_mode:
-		sonar_input = true
-	elif Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not is_aiming_mode:
-		sonar_input = true
-	elif right_click_released:
+	if right_click_released:
 		sonar_input = true
 		use_stored_direction = true
 
@@ -251,7 +302,7 @@ func _physics_process(delta):
 			emit_sonar_pulse()
 
 	was_aiming_last_frame = is_aiming_mode
-	if Input.is_key_pressed(KEY_Q) and can_attack:
+	if Input.is_action_pressed("attack") and can_attack:
 		shoot_light_projectile()
 
 
@@ -259,29 +310,22 @@ func _physics_process(delta):
 		_drop_rune()
 
 
-	var key_1_pressed = Input.is_physical_key_pressed(KEY_1)
-	var key_2_pressed = Input.is_physical_key_pressed(KEY_2)
-	var key_3_pressed = Input.is_physical_key_pressed(KEY_3)
-
-	if key_1_pressed and not rune_key_pressed[0]:
+	if Input.is_action_just_pressed("slot_1"):
 		_activate_rune_slot(0)
-	elif key_2_pressed and not rune_key_pressed[1]:
+	elif Input.is_action_just_pressed("slot_2"):
 		_activate_rune_slot(1)
-	elif key_3_pressed and not rune_key_pressed[2]:
+	elif Input.is_action_just_pressed("slot_3"):
 		_activate_rune_slot(2)
 
 
-	rune_key_pressed[0] = key_1_pressed
-	rune_key_pressed[1] = key_2_pressed
-	rune_key_pressed[2] = key_3_pressed
-
+	var direction_input = Input.get_axis("move_left", "move_right")
 	var direction = 0
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+	if direction_input < 0:
 		direction = -1
-	elif Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+	elif direction_input > 0:
 		direction = 1
 	var is_moving = direction != 0 and is_on_floor()
-	if direction:
+	if direction != 0:
 		velocity.x = direction * SPEED
 		facing_direction = Vector2.RIGHT if direction > 0 else Vector2.LEFT
 		update_sprite_direction()
@@ -375,10 +419,10 @@ func _update_camera_for_aiming(mouse_pos: Vector2):
 		return
 	var player_pos = global_position
 	var mouse_offset = mouse_pos - player_pos
-
-	var max_offset = 100.0
+	var sensitivity = clamp(float(SettingsManager.get_setting(SettingsManager.SECTION_GAMEPLAY, "mouse_sensitivity", 1.0)), 0.2, 2.5)
+	var max_offset = 100.0 * sensitivity
+	mouse_offset *= sensitivity
 	mouse_offset = mouse_offset.limit_length(max_offset)
-
 	var target_camera_pos = mouse_offset * 0.5
 	camera.position = camera.position.lerp(target_camera_pos, 0.1)
 
@@ -521,7 +565,7 @@ func _activate_rune_slot(slot_index: int):
 	var result = rune_system.activate_rune(slot_index, rune_type_to_activate)
 
 	var updated_active_runes = rune_system.get_active_runes()
-	
+
 
 func _find_best_rune_for_slot(slot_index: int, inventory: Dictionary, cooldowns: Dictionary):
 
@@ -538,7 +582,7 @@ func _drop_rune():
 	var rune_system = get_node("../RuneSystem")
 	if rune_system:
 		var success = rune_system.drop_rune()
-		
+
 
 
 func _update_rune_ui():
@@ -551,7 +595,7 @@ func _update_rune_ui():
 	var cooldowns = rune_system.get_rune_cooldowns()
 	var timers = rune_system.get_active_rune_timers()
 
-	var has_any_runes = (inventory.size() > 0) or (active_runes.filter(func(r): return r != null).size() > 0)
+	var has_any_runes = (inventory.size() > 0) or (active_runes.filter(func(r): return r != null).size() > 0) or (cooldowns.size() > 0)
 	rune_ui_container.visible = has_any_runes
 
 	var base_rune_colors = {
@@ -635,17 +679,29 @@ func _calculate_slot_assignments(active_runes: Array, inventory: Dictionary, coo
 		assignments.append(slot_data)
 
 
-	var inventory_keys = inventory.keys()
+
+	var all_rune_types = []
+
+
+	for rune_type in inventory.keys():
+		if inventory[rune_type] > 0:
+			all_rune_types.append(rune_type)
+
+
+	for rune_type in cooldowns.keys():
+		if not inventory.has(rune_type) or inventory[rune_type] == 0:
+			all_rune_types.append(rune_type)
+
 	var key_index = 0
 
 	for i in range(3):
 		if assignments[i].type == "empty":
 
-			while key_index < inventory_keys.size():
-				var rune_type = inventory_keys[key_index]
+			while key_index < all_rune_types.size():
+				var rune_type = all_rune_types[key_index]
 				key_index += 1
 
-				if inventory[rune_type] > 0 and not assigned_runes.has(rune_type):
+				if not assigned_runes.has(rune_type):
 					assigned_runes[rune_type] = true
 
 					if cooldowns.has(rune_type):
@@ -654,8 +710,8 @@ func _calculate_slot_assignments(active_runes: Array, inventory: Dictionary, coo
 					else:
 						assignments[i].type = "available"
 						assignments[i].rune_type = rune_type
-						assignments[i].count = inventory[rune_type]
-						
+						assignments[i].count = inventory.get(rune_type, 0)
+
 					break
 
 	return assignments

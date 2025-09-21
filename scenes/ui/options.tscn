@@ -2,22 +2,28 @@
 
 [ext_resource type="FontFile" uid="uid://cilxm5ndn5l0y" path="res://assets/fonts/October Crow.ttf" id="1_ad3a0"]
 [ext_resource type="Script" uid="uid://de3ftt8xccdvk" path="res://scripts/Options.gd" id="1_lr2b1"]
-[ext_resource type="FontFile" uid="uid://crsyfbiou73cv" path="res://assets/fonts/Federant-Regular.ttf" id="3_l4ffv"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_lr2b1"]
 font = ExtResource("1_ad3a0")
-font_size = 64
+font_size = 48
 font_color = Color(1, 0, 0, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_hhwow"]
-font = ExtResource("3_l4ffv")
-font_size = 24
+font = ExtResource("1_ad3a0")
+font_size = 26
+
+[sub_resource type="LabelSettings" id="LabelSettings_value"]
+font = ExtResource("1_ad3a0")
+font_size = 20
+font_color = Color(0.85, 0.85, 0.85, 1)
 
 [node name="Options" type="Control"]
 layout_mode = 3
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("1_lr2b1")
 
 [node name="ColorRect" type="ColorRect" parent="."]
@@ -25,43 +31,206 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_right = 1152.0
-offset_bottom = 648.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 1)
+color = Color(0, 0, 0, 0.9)
 
-[node name="Label" type="Label" parent="."]
-layout_mode = 0
-offset_left = -39.0
-offset_top = 45.0
-offset_right = 1233.0
-offset_bottom = 184.0
+[node name="ContentRoot" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -420.0
+offset_top = -230.0
+offset_right = 420.0
+offset_bottom = 240.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="Header" type="Label" parent="ContentRoot"]
+layout_mode = 2
+size_flags_horizontal = 3
 text = "UNSATISFIED USER
 HERE ARE SOME \"CHOICES\" WE CAN GIVE YOU"
 label_settings = SubResource("LabelSettings_lr2b1")
 horizontal_alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="."]
-layout_mode = 1
-offset_left = 288.0
-offset_top = 259.0
-offset_right = 903.0
-offset_bottom = 289.0
-
-[node name="VolumeSlider" type="HSlider" parent="HBoxContainer"]
+[node name="TabContainer" type="TabContainer" parent="ContentRoot"]
+custom_minimum_size = Vector2(0, 360)
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+current_tab = 0
+clip_tabs = false
 
-[node name="VolumeLabel" type="Label" parent="HBoxContainer"]
+[node name="Audio" type="VBoxContainer" parent="ContentRoot/TabContainer"]
 layout_mode = 2
-text = "VOLUME: 50%"
+theme_override_constants/separation = 20
+metadata/_tab_index = 0
+
+[node name="VolumeRow" type="HBoxContainer" parent="ContentRoot/TabContainer/Audio"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+
+[node name="VolumeLabel" type="Label" parent="ContentRoot/TabContainer/Audio/VolumeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "MASTER VOLUME"
 label_settings = SubResource("LabelSettings_hhwow")
+vertical_alignment = 1
 
-[node name="BACK" type="Button" parent="."]
-layout_mode = 0
-offset_left = 430.0
-offset_top = 565.0
-offset_right = 508.0
-offset_bottom = 596.0
-theme_override_fonts/font = ExtResource("3_l4ffv")
+[node name="VolumeSlider" type="HSlider" parent="ContentRoot/TabContainer/Audio/VolumeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VolumeValue" type="Label" parent="ContentRoot/TabContainer/Audio/VolumeRow"]
+layout_mode = 2
+size_flags_vertical = 1
+text = "50%"
+label_settings = SubResource("LabelSettings_value")
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="AudioHint" type="Label" parent="ContentRoot/TabContainer/Audio"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "WE'LL KEEP IT LOUD ENOUGH TO HEAR THE WHISPERS"
+label_settings = SubResource("LabelSettings_value")
+horizontal_alignment = 1
+
+[node name="Display" type="VBoxContainer" parent="ContentRoot/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 20
+metadata/_tab_index = 1
+
+[node name="VSyncToggle" type="CheckButton" parent="ContentRoot/TabContainer/Display"]
+layout_mode = 2
+text = "VSYNC"
+
+[node name="ShowFpsToggle" type="CheckButton" parent="ContentRoot/TabContainer/Display"]
+layout_mode = 2
+text = "SHOW FPS"
+
+[node name="FullscreenToggle" type="CheckButton" parent="ContentRoot/TabContainer/Display"]
+layout_mode = 2
+text = "FULLSCREEN"
+
+[node name="DisplayHint" type="Label" parent="ContentRoot/TabContainer/Display"]
+layout_mode = 2
+text = "TUNE THE WINDOW TO YOUR LIKING"
+label_settings = SubResource("LabelSettings_value")
+horizontal_alignment = 1
+
+[node name="Gameplay" type="VBoxContainer" parent="ContentRoot/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 20
+metadata/_tab_index = 2
+
+[node name="ShakeRow" type="HBoxContainer" parent="ContentRoot/TabContainer/Gameplay"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+
+[node name="ShakeLabel" type="Label" parent="ContentRoot/TabContainer/Gameplay/ShakeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "SCREEN SHAKE"
+label_settings = SubResource("LabelSettings_hhwow")
+vertical_alignment = 1
+
+[node name="ShakeSlider" type="HSlider" parent="ContentRoot/TabContainer/Gameplay/ShakeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 200.0
+step = 5.0
+
+[node name="ShakeValue" type="Label" parent="ContentRoot/TabContainer/Gameplay/ShakeRow"]
+layout_mode = 2
+text = "100%"
+label_settings = SubResource("LabelSettings_value")
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="SensitivityRow" type="HBoxContainer" parent="ContentRoot/TabContainer/Gameplay"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+
+[node name="SensitivityLabel" type="Label" parent="ContentRoot/TabContainer/Gameplay/SensitivityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "MOUSE SENSITIVITY"
+label_settings = SubResource("LabelSettings_hhwow")
+vertical_alignment = 1
+
+[node name="SensitivitySlider" type="HSlider" parent="ContentRoot/TabContainer/Gameplay/SensitivityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.2
+max_value = 2.0
+step = 0.05
+value = 0.2
+
+[node name="SensitivityValue" type="Label" parent="ContentRoot/TabContainer/Gameplay/SensitivityRow"]
+layout_mode = 2
+text = "1.00x"
+label_settings = SubResource("LabelSettings_value")
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="GameplayHint" type="Label" parent="ContentRoot/TabContainer/Gameplay"]
+layout_mode = 2
+text = "CALM THE STORM OR DIVE DEEPER"
+label_settings = SubResource("LabelSettings_value")
+horizontal_alignment = 1
+
+[node name="Controls" type="VBoxContainer" parent="ContentRoot/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 15
+metadata/_tab_index = 3
+
+[node name="ControlsHint" type="Label" parent="ContentRoot/TabContainer/Controls"]
+layout_mode = 2
+text = "CLICK AN ACTION AND PRESS A KEY, MOUSE, OR BUTTON"
+label_settings = SubResource("LabelSettings_value")
+horizontal_alignment = 1
+
+[node name="ControlsColumns" type="HBoxContainer" parent="ContentRoot/TabContainer/Controls"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 40
+
+[node name="ColumnLeft" type="VBoxContainer" parent="ContentRoot/TabContainer/Controls/ControlsColumns"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="ColumnRight" type="VBoxContainer" parent="ContentRoot/TabContainer/Controls/ControlsColumns"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="ResetBindings" type="Button" parent="ContentRoot/TabContainer/Controls"]
+layout_mode = 2
+text = "RESET TO DEFAULTS"
+
+[node name="Footer" type="HBoxContainer" parent="ContentRoot"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+
+[node name="BACK" type="Button" parent="ContentRoot/Footer"]
+custom_minimum_size = Vector2(300, 55)
+layout_mode = 2
 text = "GO BACK"

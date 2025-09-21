@@ -83,7 +83,7 @@ func _process(delta):
 	rotation = sin(time * 1.5) * 0.2
 	check_player_proximity()
 
-	if player_nearby and Input.is_key_pressed(KEY_G):
+	if player_nearby and Input.is_action_just_pressed("interact"):
 		collect_rune()
 
 func check_player_proximity():
@@ -99,7 +99,6 @@ func check_player_proximity():
 
 	if player_nearby and not was_nearby:
 		current_player = player
-		print("Near rune - Press G to collect")
 	elif not player_nearby and was_nearby:
 		current_player = null
 
@@ -243,7 +242,8 @@ func play_pickup_animation():
 
 func _apply_screen_shake(camera: Camera2D, duration: float):
 	var original_offset = camera.offset
-	var shake_strength = 15.0
+	var intensity = float(SettingsManager.get_setting(SettingsManager.SECTION_GAMEPLAY, "screen_shake_intensity", 1.0))
+	var shake_strength = 15.0 * clamp(intensity, 0.0, 2.0)
 
 	var shake_tween = create_tween()
 	shake_tween.set_loops()

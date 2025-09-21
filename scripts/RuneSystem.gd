@@ -123,6 +123,14 @@ func _handle_rune_timing(delta: float):
 		if rune_cooldowns[rune_type] <= 0:
 			types_to_remove.append(rune_type)
 
+
+	for rune_type in types_to_remove:
+		rune_cooldowns.erase(rune_type)
+		if not rune_inventory.has(rune_type):
+			rune_inventory[rune_type] = 0
+		rune_inventory[rune_type] += 1
+		rune_inventory_updated.emit()
+
 	for i in range(active_rune_slots.size()):
 		if active_rune_slots[i] != null:
 			active_rune_timers[i] -= delta
@@ -131,10 +139,7 @@ func _handle_rune_timing(delta: float):
 				var expired_rune_type = active_rune_slots[i]
 
 
-				if not rune_inventory.has(expired_rune_type):
-					rune_inventory[expired_rune_type] = 0
-				rune_inventory[expired_rune_type] += 1
-
+				rune_cooldowns[expired_rune_type] = rune_cooldown
 
 				active_rune_slots[i] = null
 				active_rune_timers[i] = 0.0
@@ -231,7 +236,7 @@ func activate_rune(slot_index: int, rune_type: RuneType = RuneType.RANGE_AMPLIFI
 
 func deactivate_rune(slot_index: int) -> bool:
 	if slot_index < 0 or slot_index >= active_rune_slots.size():
-	
+
 		return false
 
 	var rune_type = active_rune_slots[slot_index]
@@ -241,16 +246,19 @@ func deactivate_rune(slot_index: int) -> bool:
 	var remaining_time = active_rune_timers[slot_index]
 	var time_used = rune_duration - remaining_time
 
+
 	if time_used >= 5.0:
+
 		var cooldown_ratio = time_used / rune_duration
 		var reduced_cooldown = rune_cooldown * cooldown_ratio * 0.5
 		rune_cooldowns[rune_type] = reduced_cooldown
+	else:
 
-	if not rune_type in rune_cooldowns:
-		if not rune_inventory.has(rune_type):
-			rune_inventory[rune_type] = 0
-		rune_inventory[rune_type] += 1
-	
+		rune_cooldowns[rune_type] = rune_cooldown
+
+
+
+
 
 
 	active_rune_slots[slot_index] = null
