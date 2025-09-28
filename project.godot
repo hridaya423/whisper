@@ -36,6 +36,17 @@ window/stretch/mode="viewport"
 
 enabled=PackedStringArray("res://addons/godot_super-wakatime/plugin.cfg")
 
+[input]
+
+aim_mode={
+"deadzone": 0.5,
+"events": [{
+"button_index": 3,
+"device": -1,
+"type": "mouse_button"
+}]
+}
+
 [layer_names]
 
 2d_physics/layer_1="Enemy"

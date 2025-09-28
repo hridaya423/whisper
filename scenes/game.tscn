@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=4 uid="uid://kwtk3huoscm5"]
+[gd_scene load_steps=24 format=4 uid="uid://kwtk3huoscm5"]
 
 [ext_resource type="PackedScene" uid="uid://bkj3efqmuws2y" path="res://scenes/player/Player.tscn" id="1_uwrxv"]
 [ext_resource type="Texture2D" uid="uid://xwt5qapegddp" path="res://images.png" id="2_yqjtg"]
@@ -14,7 +14,11 @@
 [ext_resource type="PackedScene" uid="uid://b4b2ndeorm700" path="res://scenes/EnemySpawner.tscn" id="10_vtaks"]
 [ext_resource type="Script" uid="uid://casxmatuvwuxq" path="res://scripts/LevelManager.gd" id="12_dinhu"]
 [ext_resource type="Texture2D" uid="uid://ylhfwmkxo8b4" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_g.svg" id="13_kvuet"]
-[ext_resource type="Texture2D" uid="uid://cjwg2h28nn38l" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/keyboard_q_outline.svg" id="14_trtic"]
+[ext_resource type="Script" uid="uid://delqpsis8kf3m" path="res://scripts/QuestSystem.gd" id="16_ca42v"]
+[ext_resource type="Texture2D" uid="uid://by6scesa6prij" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Vector/mouse_right_outline.svg" id="16_rysoc"]
+[ext_resource type="FontFile" uid="uid://cilxm5ndn5l0y" path="res://assets/fonts/October Crow.ttf" id="17_ssvqc"]
+[ext_resource type="Texture2D" uid="uid://c0h360cusif18" path="res://assets/kenney_input-prompts_1.4/Keyboard & Mouse/Default/mouse_left_outline.png" id="19_1kice"]
+[ext_resource type="PackedScene" uid="uid://c5p07dpgfkbh4" path="res://scenes/LightCrystal.tscn" id="19_264po"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_lnu2h"]
 resource_name = "<null>"
@@ -36,6 +40,10 @@ sources/2 = SubResource("TileSetAtlasSource_lnu2h")
 
 [sub_resource type="LabelSettings" id="LabelSettings_lbhrr"]
 font = ExtResource("5_iywne")
+
+[sub_resource type="LabelSettings" id="LabelSettings_264po"]
+font = ExtResource("17_ssvqc")
+font_size = 30
 
 [node name="Main" type="Node2D"]
 
@@ -131,10 +139,23 @@ text = "might help"
 label_settings = SubResource("LabelSettings_lbhrr")
 metadata/_edit_use_anchors_ = true
 
-[node name="KeyboardQOutline" type="Sprite2D" parent="prompts"]
-position = Vector2(1276, -17)
-scale = Vector2(0.453125, 0.453125)
-texture = ExtResource("14_trtic")
+[node name="MouseRightOutline" type="Sprite2D" parent="prompts"]
+position = Vector2(449, -125)
+scale = Vector2(0.46875, 0.46875)
+texture = ExtResource("16_rysoc")
+
+[node name="Label" type="Label" parent="prompts/MouseRightOutline"]
+anchors_preset = -1
+anchor_top = -0.00462963
+anchor_bottom = -0.00462963
+offset_left = -76.8
+offset_top = -14.637
+offset_right = 49.2
+offset_bottom = 15.363
+scale = Vector2(1, 1.02816)
+text = "Try"
+label_settings = SubResource("LabelSettings_264po")
+metadata/_edit_use_anchors_ = true
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
@@ -147,8 +168,6 @@ texture = ExtResource("7_gee14")
 script = ExtResource("8_0tnpc")
 rune_type = 1
 
-[node name="Node2D3" type="Node2D" parent="."]
-
 [node name="Node2D4" type="Node2D" parent="."]
 
 [node name="AmplifierRune" type="Sprite2D" parent="Node2D4"]
@@ -156,3 +175,15 @@ position = Vector2(4453, 279)
 scale = Vector2(0.148437, 0.148437)
 texture = ExtResource("7_gee14")
 script = ExtResource("8_0tnpc")
+
+[node name="QuestManager" type="Node2D" parent="."]
+script = ExtResource("16_ca42v")
+
+[node name="LightCrystal" parent="." instance=ExtResource("19_264po")]
+position = Vector2(4824, 302)
+scale = Vector2(0.427778, 0.427778)
+
+[node name="MouseLeftOutline" type="Sprite2D" parent="."]
+position = Vector2(1278, -16)
+scale = Vector2(0.484375, 0.484375)
+texture = ExtResource("19_1kice")
