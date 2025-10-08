@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpikedPlatform.gd" id="1"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(64, 16)
+
+[sub_resource type="RectangleShape2D" id="2"]
+size = Vector2(64, 8.4)
+
+[node name="SpikedPlatform" type="StaticBody2D"]
+script = ExtResource("1")
+platform_size = Vector2(64, 16)
+spike_height = 14.0
+spike_count = 6
+damage_cooldown = 0.7
+knockback_strength = 140.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("1")
+
+[node name="SpikeArea" type="Area2D" parent="."]
+monitoring = true
+monitorable = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SpikeArea"]
+shape = SubResource("2")
+position = Vector2(0, -14.8)

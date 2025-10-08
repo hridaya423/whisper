@@ -1,0 +1,29 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/CorruptionPool.gd" id="1"]
+
+[sub_resource type="CircleShape2D" id="1"]
+radius = 48.0
+
+[node name="CorruptionPool" type="Node2D"]
+script = ExtResource("1")
+radius = 48.0
+vertical_scale = 0.35
+outline_points = 28
+distortion_amplitude = 16.0
+distortion_seed = 0
+damage_interval = 1.5
+damage_per_tick = 1
+slow_multiplier = 0.6
+sonar_outline_subdivisions = 2
+overlay_color = Color(0.35, 0, 0.45, 0.38)
+overlay_fade_time = 0.3
+overlay_vignette_radius = 0.75
+overlay_vignette_softness = 0.45
+
+[node name="Area2D" type="Area2D" parent="."]
+monitoring = true
+monitorable = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+shape = SubResource("1")

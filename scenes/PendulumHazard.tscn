@@ -1,0 +1,22 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/PendulumHazard.gd" id="1"]
+
+[sub_resource type="CircleShape2D" id="1"]
+radius = 18.0
+
+[node name="PendulumHazard" type="Node2D"]
+script = ExtResource("1")
+rod_length = 140.0
+bob_radius = 18.0
+swing_amplitude_degrees = 65.0
+swing_period = 2.5
+push_force = 720.0
+damage_cooldown = 0.8
+
+[node name="BobArea" type="Area2D" parent="."]
+monitoring = true
+monitorable = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BobArea"]
+shape = SubResource("1")

@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3 uid="uid://bounce_pad_001"]
+
+[ext_resource type="Script" path="res://scripts/BouncePad.gd" id="1_bounce"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(48, 16)
+
+[node name="BouncePad" type="AnimatableBody2D"]
+script = ExtResource("1_bounce")
+platform_size = Vector2(48, 16)
+bounce_strength = 600.0
+bounce_direction = Vector2(0, -1)
+compression_amount = 4.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+modulate = Color(0.4, 0.8, 1, 1)
+scale = Vector2(3, 1)
+visible = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_1")

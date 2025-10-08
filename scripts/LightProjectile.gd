@@ -32,6 +32,8 @@ func set_charge_level(level: float):
 		glow_particles.amount = int(15 + (charge_level * 25))
 		glow_particles.scale_amount_max = 0.8 + (charge_level * 0.7)
 func _ready():
+	add_to_group("player_projectiles")
+	
 	if direction.length_squared() == 0:
 		direction = Vector2.RIGHT
 	else:
@@ -165,13 +167,15 @@ func _physics_process(delta):
 		sprite.rotation += delta * 4.0
 func _on_body_entered(body):
 	print("Light projectile hit body: ", body.name)
-	if body.has_method("take_damage") and body != get_parent().get_node("Player"):
+	if body.has_method("take_damage"):
 		var damage_amount = base_damage + int(charge_level * 2)
-		if body.has_method("take_damage_amount"):
-			body.take_damage_amount(damage_amount)
+
+		if body.is_in_group("bosses"):
+			body.take_damage(damage_amount)
 		else:
 			for i in range(damage_amount):
 				body.take_damage()
+
 		_create_light_impact_effect()
 		queue_free()
 func _on_area_entered(area):

@@ -13,7 +13,9 @@ var wave_rings = []
 var max_wave_rings = 3
 var highlighted_edges = []
 var tilemap_layer: TileMapLayer
-var platform_edges = []
+var tilemap_edges = []
+var platform_edges = [] 
+var all_edges = []
 var rune_system: RuneSystem
 var camera: Camera2D
 var player: CharacterBody2D
@@ -30,31 +32,46 @@ func _ready():
 	z_index = 1000
 	if tilemap_layer:
 		tilemap_layer.visible = false
-	_calculate_platform_edges()
+
+	_calculate_tilemap_edges()
 func _process(delta):
 	if is_glowing:
 		glow_timer -= delta
 		if glow_timer <= 0:
 			is_glowing = false
 			wave_rings.clear()
+
+	_calculate_platform_edges()
+
+	all_edges = tilemap_edges + platform_edges
+
 	_update_wave_rings(delta)
 	queue_redraw()
 func _draw():
 	if not is_glowing:
 		return
 	_draw_wave_rings()
-	if tilemap_layer and not platform_edges.is_empty():
+	if tilemap_layer and not all_edges.is_empty():
 		_draw_platform_highlights()
-func _calculate_platform_edges():
-	platform_edges.clear()
+
+func _has_property(node: Object, property_name: StringName) -> bool:
+	for property_info in node.get_property_list():
+		if property_info.get("name") == property_name:
+			return true
+	return false
+
+func _calculate_tilemap_edges():
+	tilemap_edges.clear()
 	if not tilemap_layer:
 		return
+
 	var used_rect = tilemap_layer.get_used_rect()
 	for x in range(used_rect.position.x, used_rect.position.x + used_rect.size.x):
 		for y in range(used_rect.position.y, used_rect.position.y + used_rect.size.y):
 			var tile_pos = Vector2i(x, y)
 			if tilemap_layer.get_cell_source_id(tile_pos) == -1:
 				continue
+
 			var world_pos = tilemap_layer.map_to_local(tile_pos)
 			var half_tile = TILE_SIZE / 2.0
 			var neighbors = [
@@ -77,7 +94,58 @@ func _calculate_platform_edges():
 				var neighbor_pos = neighbors[i]
 				var neighbor_has_tile = tilemap_layer.get_cell_source_id(neighbor_pos) != -1
 				if not neighbor_has_tile:
-					platform_edges.append(edge_lines[i])
+					tilemap_edges.append(edge_lines[i])
+
+func _calculate_platform_edges():
+	platform_edges.clear()
+
+	for platform in get_tree().get_nodes_in_group("sonar_platforms"):
+		if not platform is Node2D:
+			continue
+
+		if platform.has_method("get_sonar_edges"):
+			var extra_edges = platform.get_sonar_edges()
+			if typeof(extra_edges) == TYPE_ARRAY:
+				for edge in extra_edges:
+					if typeof(edge) == TYPE_DICTIONARY and edge.has("start") and edge.has("end"):
+						platform_edges.append({
+							"start": edge.start,
+							"end": edge.end,
+							"platform": platform
+						})
+
+		var rects: Array = []
+		if platform.has_method("get_sonar_rects"):
+			rects = platform.get_sonar_rects()
+		elif platform.has_method("get_sonar_rect"):
+			var rect_result = platform.get_sonar_rect()
+			if typeof(rect_result) == TYPE_ARRAY:
+				rects = rect_result
+			elif rect_result is Rect2:
+				rects = [rect_result]
+		elif _has_property(platform, "platform_size"):
+			rects = [Rect2(platform.global_position - platform.platform_size / 2, platform.platform_size)]
+
+		for rect_value in rects:
+			if not rect_value is Rect2:
+				continue
+			var rect: Rect2 = rect_value
+			if rect.size.x <= 0 or rect.size.y <= 0:
+				continue
+
+			var corners = [
+				rect.position,
+				rect.position + Vector2(rect.size.x, 0),
+				rect.position + rect.size,
+				rect.position + Vector2(0, rect.size.y)
+			]
+			var edge_lines = [
+				{"start": corners[0], "end": corners[1], "platform": platform},
+				{"start": corners[1], "end": corners[2], "platform": platform},
+				{"start": corners[2], "end": corners[3], "platform": platform},
+				{"start": corners[3], "end": corners[0], "platform": platform}
+			]
+			platform_edges += edge_lines
 func _calculate_fast_wave(distance: float, wave_radius: float) -> float:
 	var wave_thickness = 50.0
 	var distance_to_wave = abs(distance - wave_radius)
@@ -119,28 +187,27 @@ func _draw_platform_highlights():
 	_update_highlighted_edges()
 	for edge_data in highlighted_edges:
 		var edge = edge_data.edge
-		var highlight_alpha = edge_data.alpha
-		edge_data.fade_timer -= get_process_delta_time()
-		if edge_data.fade_timer > 0:
-			var fade_progress = edge_data.fade_timer / edge_data.fade_duration
-			highlight_alpha *= fade_progress
-			_draw_highlighted_line(edge.start, edge.end, highlight_alpha)
-	highlighted_edges = highlighted_edges.filter(func(edge_data): return edge_data.fade_timer > 0)
+		_draw_highlighted_line(edge.start, edge.end, edge_data.alpha)
+
 func _update_highlighted_edges():
-	for edge in platform_edges:
+	var new_edges = []
+
+	for edge in all_edges:
 		var start_pos = edge.start
 		var end_pos = edge.end
 		var edge_center = (start_pos + end_pos) / 2.0
 		var distance_to_sonar = edge_center.distance_to(sonar_position)
+
 		if distance_to_sonar > sonar_range:
 			continue
+
 		var direction_to_edge = (edge_center - sonar_position).normalized()
 		var angle_to_edge = rad_to_deg(sonar_direction.angle_to(direction_to_edge))
-		var angle_diff = abs(angle_to_edge)
-		if angle_diff > sonar_cone_angle / 2.0:
+		if abs(angle_to_edge) > sonar_cone_angle / 2.0:
 			continue
-		var should_highlight = false
+
 		var max_intensity = 0.0
+		var should_highlight = false
 		for ring in wave_rings:
 			if not ring.active:
 				continue
@@ -149,24 +216,20 @@ func _update_highlighted_edges():
 				var ring_intensity = 1.0 - (distance_to_ring / 25.0)
 				max_intensity = max(max_intensity, ring_intensity * ring.alpha)
 				should_highlight = true
+
 		if should_highlight:
-			var existing_edge = null
-			for edge_data in highlighted_edges:
-				if edge_data.edge == edge:
-					existing_edge = edge_data
-					break
-			var direction_factor = 1.0 - (angle_diff / (sonar_cone_angle / 2.0)) * 0.3
+			var direction_factor = 1.0 - (abs(angle_to_edge) / (sonar_cone_angle / 2.0)) * 0.3
 			var final_alpha = max_intensity * direction_factor * 0.9
-			if existing_edge:
-				existing_edge.alpha = max(existing_edge.alpha, final_alpha)
-				existing_edge.fade_timer = existing_edge.fade_duration
-			else:
-				highlighted_edges.append({
-					"edge": edge,
-					"alpha": final_alpha,
-					"fade_timer": 3.0,
-					"fade_duration": 3.0
-				})
+
+			new_edges.append({
+				"edge": edge,
+				"alpha": final_alpha,
+				"fade_timer": 0.1, 
+				"fade_duration": 0.1
+			})
+
+	highlighted_edges = new_edges
+
 func _draw_highlighted_line(start: Vector2, end: Vector2, alpha: float):
 	var color = glow_color
 	color.a = alpha

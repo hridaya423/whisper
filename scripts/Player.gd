@@ -56,6 +56,12 @@ var footstep_timer = 0.0
 var base_footstep_interval = 0.4
 var was_on_floor = false
 var last_velocity_y = 0.0
+
+var animation_frame_counter = 0
+var is_walk_step_frame = false
+var player_base_texture: Texture2D
+var player_step_texture: Texture2D
+var player_jump_texture: Texture2D
 var health_ui_layer: CanvasLayer
 var health_bar_background: ColorRect
 var health_bar_fill: ColorRect
@@ -82,6 +88,8 @@ var dash_buffer_timer: float = 0.0
 const JUMP_BUFFER_TIME: float = 0.1
 const ATTACK_BUFFER_TIME: float = 0.2
 const DASH_BUFFER_TIME: float = 0.15
+var environment_speed_modifiers: Dictionary[int, float] = {}
+var environment_speed_multiplier: float = 1.0
 @export var light_projectile_scene: PackedScene
 @export var corruption_start_time: float = 20.0
 @export var corruption_tick_interval: float = 1.0
@@ -106,6 +114,7 @@ signal player_died
 func _ready():
 	z_index = 101
 	add_to_group("player")
+	_load_animation_textures()
 	var game_manager = get_node_or_null("../GameManager")
 	if game_manager and game_manager.has_method("_on_player_sonar_pulse"):
 		sonar_pulse_emitted.connect(Callable(game_manager, "_on_player_sonar_pulse"))
@@ -260,6 +269,7 @@ func _physics_process(delta):
 	_update_rune_ui()
 	_update_sonar_indicator()
 	_update_camera_micro_effects()
+	_update_player_animation(delta)
 	_update_input_buffers(delta)
 	if invulnerable:
 		invulnerable_timer -= delta
@@ -497,6 +507,45 @@ func _stop_critical_health_camera_shake():
 	if critical_health_shake_tween and critical_health_shake_tween.is_valid():
 		critical_health_shake_tween.kill()
 		critical_health_shake_tween = null
+
+func _load_animation_textures():
+	player_base_texture = load("res://assets/sprites/player.png")
+	player_step_texture = load("res://assets/sprites/playerstep.png")
+	player_jump_texture = load("res://assets/sprites/playerjump.png")
+
+	if sprite and player_base_texture:
+		sprite.texture = player_base_texture
+
+func _update_player_animation(delta: float):
+	if not sprite:
+		return
+
+	var is_moving = abs(velocity.x) > 5.0
+	var is_airborne = not is_on_floor()
+
+	if is_airborne:
+		sprite.texture = player_jump_texture
+		is_walk_step_frame = false
+		animation_frame_counter = 0
+	elif is_moving:
+		animation_frame_counter += 1
+		var current_speed = abs(velocity.x)
+		var speed_multiplier = max(current_speed / SPEED, 0.5)
+		var frame_threshold = int(6.0 / speed_multiplier)
+		frame_threshold = clamp(frame_threshold, 4, 12)
+
+		if animation_frame_counter >= frame_threshold:
+			animation_frame_counter = 0
+			is_walk_step_frame = not is_walk_step_frame
+
+		if is_walk_step_frame:
+			sprite.texture = player_step_texture
+		else:
+			sprite.texture = player_base_texture
+	else:
+		sprite.texture = player_base_texture
+		is_walk_step_frame = false
+		animation_frame_counter = 0
 func update_sprite_direction():
 	if sprite:
 		if facing_direction == Vector2.LEFT:
@@ -931,6 +980,18 @@ func _find_node_by_name(node: Node, name: String) -> Node:
 		if result:
 			return result
 	return null
+func add_environment_speed_modifier(source_id: int, multiplier: float) -> void:
+	environment_speed_modifiers[source_id] = clamp(multiplier, 0.05, 1.0)
+	_recalculate_environment_speed_multiplier()
+func remove_environment_speed_modifier(source_id: int) -> void:
+	environment_speed_modifiers.erase(source_id)
+	_recalculate_environment_speed_multiplier()
+func _recalculate_environment_speed_multiplier() -> void:
+	var combined: float = 1.0
+	for value in environment_speed_modifiers.values():
+		if value is float or value is int:
+			combined *= float(value)
+	environment_speed_multiplier = clamp(combined, 0.1, 1.0)
 func get_effective_speed() -> float:
 	var base_speed = SPEED
 	if reward_system and reward_system.has_method("get_speed_multiplier"):
@@ -939,6 +1000,7 @@ func get_effective_speed() -> float:
 		if quest_system.has_active_penalty(quest_system.PenaltyType.MOVEMENT_SPEED_REDUCTION):
 			var penalty = quest_system.get_penalty_multiplier(quest_system.PenaltyType.MOVEMENT_SPEED_REDUCTION)
 			base_speed *= (1.0 - penalty)
+	base_speed *= environment_speed_multiplier
 	return base_speed
 func get_effective_attack_damage() -> float:
 	var base_damage = 1.0
@@ -1069,6 +1131,7 @@ func _create_power_up_visual_effect():
 		tween.set_loops()
 		tween.tween_property(sprite, "modulate", Color(0.8, 0.9, 1.2, 1.0), 1.5)
 		tween.tween_property(sprite, "modulate", Color(0.9, 0.95, 1.1, 1.0), 1.5)
+		
 func _setup_foot_particles(particles: CPUParticles2D, foot_offset: Vector2):
 	particles.position = foot_offset
 	particles.z_index = -1
@@ -1083,6 +1146,7 @@ func _setup_foot_particles(particles: CPUParticles2D, foot_offset: Vector2):
 	particles.scale_amount_min = 0.2
 	particles.scale_amount_max = 0.5
 	particles.gravity = Vector2(0, 20)
+	
 func _setup_lightning_particles():
 	lightning_particles.position = Vector2(0, 0)
 	lightning_particles.z_index = 1
@@ -1097,6 +1161,7 @@ func _setup_lightning_particles():
 	lightning_particles.scale_amount_min = 0.1
 	lightning_particles.scale_amount_max = 0.3
 	lightning_particles.gravity = Vector2(0, 0)
+	
 func _setup_lightning_sparks():
 	lightning_animation_timer = 0.0
 	spark_appear_intervals.clear()
@@ -1123,7 +1188,7 @@ uniform int octave_count: hint_range(1, 20) = 6;
 uniform float amp_start = 0.3;
 uniform float amp_coeff = 0.7;
 uniform float freq_coeff = 3.0;
-uniform float speed = 2.0;
+uniform float speed = 2.0;t
 uniform float spark_offset: hint_range(0.0, 10.0) = 0.0;
 float hash12(vec2 x) {
 	return fract(cos(mod(dot(x, vec2(13.9898, 8.141)), 3.14)) * 43758.5453);
@@ -1156,7 +1221,7 @@ void fragment() {
 	vec2 uv = 2.0 * UV - 1.0;
 	uv += 2.0 * fbm(uv + (TIME + spark_offset) * speed, octave_count) - 1.0;
 	float dist = abs(uv.x);
-	float crackle = mix(0.0, 0.15, hash12(vec2(TIME + spark_offset)));
+	float crackle = mix(0.0, 0.15, hash12(vec2(TIME + spark_offset)));d
 	float lightning_intensity = crackle / (dist + 0.02);
 	lightning_intensity *= step(dist, 0.3) * step(0.02, crackle);
 	vec3 color = effect_color * lightning_intensity;
@@ -1253,7 +1318,7 @@ func _create_footstep_dust():
 func _create_dash_trail_particles():
 	if dash_trail_particles:
 		dash_trail_particles.queue_free()
-	dash_trail_particles = CPUParticles2D.new()
+	dash_trail_particles = CPUParticles2D.new()	
 	add_child(dash_trail_particles)
 	dash_trail_particles.position = Vector2(0, 0)
 	dash_trail_particles.emitting = true
