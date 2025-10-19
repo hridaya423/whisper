@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://bkj3efqmuws2y"]
+[gd_scene load_steps=10 format=3 uid="uid://bkj3efqmuws2y"]
 
 [ext_resource type="Script" uid="uid://ducs7e4bnoqup" path="res://scripts/Player.gd" id="1_wr5hl"]
 [ext_resource type="AudioStream" uid="uid://c3geth4hdfxa3" path="res://assets/sfx/footstep.mp3" id="2_524rm"]
@@ -7,6 +7,7 @@
 [ext_resource type="AudioStream" uid="uid://jgqxt66qsypg" path="res://assets/sfx/sonar.mp3" id="3_tpg5x"]
 [ext_resource type="AudioStream" uid="uid://cl3ktkynxd6u5" path="res://assets/sfx/jump.mp3" id="5_tpg5x"]
 [ext_resource type="AudioStream" uid="uid://cj22c71ni60i3" path="res://assets/sfx/playerattack.mp3" id="7_npwbq"]
+[ext_resource type="Script" uid="uid://4o0nx2bv1fkj" path="res://scripts/companions/LightMoth.gd" id="8_dad60"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_o8nba"]
 size = Vector2(16, 32)
@@ -39,3 +40,6 @@ stream = ExtResource("5_tpg5x")
 
 [node name="AttackAudio" type="AudioStreamPlayer2D" parent="."]
 stream = ExtResource("7_npwbq")
+
+[node name="LightMoth" type="Node2D" parent="."]
+script = ExtResource("8_dad60")

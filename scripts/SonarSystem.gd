@@ -12,6 +12,12 @@ var sonar_cone_angle = 35.0
 var wave_rings = []
 var max_wave_rings = 3
 var highlighted_edges = []
+var ambient_enabled = false
+var ambient_position = Vector2.ZERO
+var ambient_range = 0.0
+var ambient_glow_color = Color(0.92, 0.97, 1.0, 0.2)
+var ambient_intensity_scale = 0.6
+var pulse_active = false
 var tilemap_layer: TileMapLayer
 var tilemap_edges = []
 var platform_edges = [] 
@@ -24,13 +30,14 @@ var original_camera_position: Vector2
 var camera_follow_tween: Tween
 const TILE_SIZE = 16
 func _ready():
-	tilemap_layer = get_node("../TileMapLayer")
-	rune_system = get_node("../RuneSystem")
-	player = get_node("../Player")
-	if player:
-		camera = player.get_node("Camera2D")
+	tilemap_layer = get_node_or_null("../TileMapLayer")
+	rune_system = get_node_or_null("../RuneSystem")
+	player = get_node_or_null("../Player")
+	if player and is_instance_valid(player):
+		camera = player.get_node_or_null("Camera2D")
+	add_to_group("sonar_system")
 	z_index = 1000
-	if tilemap_layer:
+	if tilemap_layer and is_instance_valid(tilemap_layer):
 		tilemap_layer.visible = false
 
 	_calculate_tilemap_edges()
@@ -48,8 +55,10 @@ func _process(delta):
 	_update_wave_rings(delta)
 	queue_redraw()
 func _draw():
-	if not is_glowing:
+	if not is_glowing and not ambient_enabled:
 		return
+	if ambient_enabled:
+		_draw_ambient_glow()
 	_draw_wave_rings()
 	if tilemap_layer and not all_edges.is_empty():
 		_draw_platform_highlights()
@@ -100,7 +109,7 @@ func _calculate_platform_edges():
 	platform_edges.clear()
 
 	for platform in get_tree().get_nodes_in_group("sonar_platforms"):
-		if not platform is Node2D:
+		if not platform or not is_instance_valid(platform) or not platform is Node2D:
 			continue
 
 		if platform.has_method("get_sonar_edges"):
@@ -159,6 +168,7 @@ func _is_bottom_edge(edge: Dictionary) -> bool:
 	var end_pos = edge.end
 	return abs(start_pos.y - end_pos.y) < 1.0 and start_pos.y > sonar_position.y + 10
 func _update_wave_rings(delta: float):
+	var any_active = false
 	for ring in wave_rings:
 		if ring.delay > 0:
 			ring.delay -= delta
@@ -170,6 +180,9 @@ func _update_wave_rings(delta: float):
 		ring.alpha = 1.0 - progress
 		if ring.radius >= ring.max_radius:
 			ring.alpha = 0.0
+		if ring.active and ring.alpha > 0.0:
+			any_active = true
+	pulse_active = any_active
 func _draw_wave_rings():
 	for ring in wave_rings:
 		if not ring.active or ring.alpha <= 0:
@@ -183,6 +196,15 @@ func _draw_wave_rings():
 		if ring.radius > 5:
 			color.a = ring.alpha * 0.3
 			draw_arc(sonar_position, ring.radius - 2, start_angle, end_angle, arc_points, color, 4.0)
+func _draw_ambient_glow():
+	if ambient_range <= 0.0:
+		return
+	var outer_color = ambient_glow_color
+	outer_color.a *= 0.45
+	draw_arc(ambient_position, ambient_range, 0.0, TAU, 64, outer_color, 1.5)
+	var mid_color = ambient_glow_color
+	mid_color.a *= 0.7
+	draw_arc(ambient_position, ambient_range * 0.65, 0.0, TAU, 64, mid_color, 2.2)
 func _draw_platform_highlights():
 	_update_highlighted_edges()
 	for edge_data in highlighted_edges:
@@ -191,42 +213,59 @@ func _draw_platform_highlights():
 
 func _update_highlighted_edges():
 	var new_edges = []
+	var reference_position = ambient_position if ambient_enabled else sonar_position
+	var pulse_range = sonar_range if pulse_active else 0.0
+	var effective_range = max(ambient_range, pulse_range) if ambient_enabled else pulse_range
+	if effective_range <= 0.0:
+		highlighted_edges = []
+		return
+
+	var half_cone_angle = max(sonar_cone_angle * 0.5, 1.0)
 
 	for edge in all_edges:
 		var start_pos = edge.start
 		var end_pos = edge.end
 		var edge_center = (start_pos + end_pos) / 2.0
-		var distance_to_sonar = edge_center.distance_to(sonar_position)
+		var distance_to_center = edge_center.distance_to(reference_position)
 
-		if distance_to_sonar > sonar_range:
+		if distance_to_center > effective_range:
 			continue
 
 		var direction_to_edge = (edge_center - sonar_position).normalized()
 		var angle_to_edge = rad_to_deg(sonar_direction.angle_to(direction_to_edge))
-		if abs(angle_to_edge) > sonar_cone_angle / 2.0:
+		var within_cone = abs(angle_to_edge) <= half_cone_angle
+		var within_ambient = ambient_enabled and distance_to_center <= ambient_range
+
+		if not within_cone and not within_ambient:
 			continue
 
-		var max_intensity = 0.0
-		var should_highlight = false
-		for ring in wave_rings:
-			if not ring.active:
-				continue
-			var distance_to_ring = abs(distance_to_sonar - ring.radius)
-			if distance_to_ring < 25:
-				var ring_intensity = 1.0 - (distance_to_ring / 25.0)
-				max_intensity = max(max_intensity, ring_intensity * ring.alpha)
-				should_highlight = true
+		var highlight_alpha = 0.0
 
-		if should_highlight:
-			var direction_factor = 1.0 - (abs(angle_to_edge) / (sonar_cone_angle / 2.0)) * 0.3
-			var final_alpha = max_intensity * direction_factor * 0.9
+		if pulse_active and within_cone:
+			for ring in wave_rings:
+				if not ring.active:
+					continue
+				var distance_to_ring = abs(distance_to_center - ring.radius)
+				if distance_to_ring < 25:
+					var ring_intensity = 1.0 - (distance_to_ring / 25.0)
+					var direction_factor = 1.0 - (abs(angle_to_edge) / half_cone_angle) * 0.3
+					var pulse_alpha = ring_intensity * ring.alpha * direction_factor * 0.9
+					highlight_alpha = max(highlight_alpha, pulse_alpha)
 
-			new_edges.append({
-				"edge": edge,
-				"alpha": final_alpha,
-				"fade_timer": 0.1, 
-				"fade_duration": 0.1
-			})
+		if ambient_enabled and within_ambient:
+			var ambient_factor = 1.0 - clamp(distance_to_center / max(ambient_range, 0.01), 0.0, 1.0)
+			ambient_factor = pow(ambient_factor, 1.4)
+			highlight_alpha = max(highlight_alpha, ambient_factor * ambient_intensity_scale)
+
+		if highlight_alpha <= 0.0:
+			continue
+
+		new_edges.append({
+			"edge": edge,
+			"alpha": highlight_alpha,
+			"fade_timer": 0.1,
+			"fade_duration": 0.1
+		})
 
 	highlighted_edges = new_edges
 
@@ -236,19 +275,40 @@ func _draw_highlighted_line(start: Vector2, end: Vector2, alpha: float):
 	draw_line(start, end, color, 2.0)
 	color.a = alpha * 0.4
 	draw_line(start, end, color, 4.0)
+func set_ambient_sonar(position: Vector2, range: float, color: Color = Color(0.92, 0.97, 1.0, 0.2)):
+	ambient_enabled = true
+	ambient_position = position
+	ambient_range = max(range, 0.0)
+	ambient_glow_color = color
+	if not pulse_active:
+		sonar_position = ambient_position
+	is_glowing = true
+	glow_timer = max(glow_timer, 0.1)
+	queue_redraw()
+func clear_ambient_sonar():
+	ambient_enabled = false
+	ambient_range = 0.0
+	ambient_position = Vector2.ZERO
+	if not pulse_active:
+		is_glowing = false
+		glow_timer = 0.0
+	queue_redraw()
 func _on_sonar_pulse(position: Vector2, range: float, direction: Vector2):
+	sonar_range = range
+
 	if rune_system:
-		sonar_range = base_sonar_range * rune_system.get_range_multiplier()
 		glow_duration = base_glow_duration * rune_system.get_duration_multiplier()
 	else:
-		sonar_range = base_sonar_range
 		glow_duration = base_glow_duration
 	is_glowing = true
 	glow_timer = glow_duration
 	sonar_position = position
 	sonar_direction = direction.normalized()
-	var range_multiplier = rune_system.get_range_multiplier() if rune_system else 1.0
-	if range_multiplier > 1.3 and camera and player:
+	pulse_active = true
+
+	var range_ratio = sonar_range / base_sonar_range
+	if range_ratio > 1.3 and camera and player:
+		print("Camera wave follow activated - range ratio: ", range_ratio)
 		_start_camera_wave_follow()
 	wave_rings.clear()
 	highlighted_edges.clear()

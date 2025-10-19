@@ -33,7 +33,7 @@ func set_charge_level(level: float):
 		glow_particles.scale_amount_max = 0.8 + (charge_level * 0.7)
 func _ready():
 	add_to_group("player_projectiles")
-	
+
 	if direction.length_squared() == 0:
 		direction = Vector2.RIGHT
 	else:
@@ -47,6 +47,12 @@ func _ready():
 	_create_collision()
 	_create_particle_trail()
 	z_index = 100
+
+func _exit_tree():
+	if glow_particles and is_instance_valid(glow_particles):
+		glow_particles.emitting = false
+	if meteor_trail and is_instance_valid(meteor_trail):
+		meteor_trail.emitting = false
 func _create_light_visuals():
 	sprite = Sprite2D.new()
 	add_child(sprite)
@@ -171,10 +177,20 @@ func _on_body_entered(body):
 		var damage_amount = base_damage + int(charge_level * 2)
 
 		if body.is_in_group("bosses"):
-			body.take_damage(damage_amount)
+			var boss_hit_config: Dictionary = {
+				"is_player_attack": true,
+				"is_projectile": true,
+				"projectile_charge": charge_level
+			}
+			body.take_damage(damage_amount, global_position, boss_hit_config)
 		else:
+			var enemy_hit_config: Dictionary = {
+				"is_player_attack": true,
+				"is_projectile": true,
+				"projectile_charge": charge_level
+			}
 			for i in range(damage_amount):
-				body.take_damage()
+				body.take_damage(1, global_position, enemy_hit_config)
 
 		_create_light_impact_effect()
 		queue_free()
@@ -184,8 +200,11 @@ func _on_area_entered(area):
 		_create_light_impact_effect()
 		queue_free()
 func _create_light_impact_effect():
+	var parent = get_parent()
+	if not parent or not is_instance_valid(parent):
+		return
 	var impact = Node2D.new()
-	get_parent().add_child(impact)
+	parent.add_child(impact)
 	impact.global_position = global_position
 	var flash = Sprite2D.new()
 	impact.add_child(flash)
@@ -222,7 +241,14 @@ func _create_light_impact_effect():
 	tween.parallel().tween_property(flash, "modulate:a", 0.0, 0.4)
 	tween.finished.connect(func(): impact.queue_free())
 func _fade_and_destroy():
+	if not is_instance_valid(self):
+		return
 	var tween = create_tween()
-	tween.parallel().tween_property(sprite, "modulate:a", 0.0, 0.3)
-	tween.parallel().tween_property(glow_particles, "modulate:a", 0.0, 0.3)
-	tween.finished.connect(func(): queue_free())
+	if sprite and is_instance_valid(sprite):
+		tween.parallel().tween_property(sprite, "modulate:a", 0.0, 0.3)
+	if glow_particles and is_instance_valid(glow_particles):
+		tween.parallel().tween_property(glow_particles, "modulate:a", 0.0, 0.3)
+	tween.finished.connect(func():
+		if is_instance_valid(self):
+			queue_free()
+	)

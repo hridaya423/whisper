@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3 uid="uid://wind_tunnel_scene"]
+
+[ext_resource type="Script" path="res://scripts/WindTunnel.gd" id="1_wind"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wind"]
+size = Vector2(128, 64)
+
+[node name="WindTunnel" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1_wind")

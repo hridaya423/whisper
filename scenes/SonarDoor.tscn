@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://sonar_door_scene"]
+
+[ext_resource type="Script" path="res://scripts/SonarDoor.gd" id="1_door"]
+
+[node name="SonarDoor" type="StaticBody2D"]
+collision_layer = 1
+collision_mask = 1
+script = ExtResource("1_door")

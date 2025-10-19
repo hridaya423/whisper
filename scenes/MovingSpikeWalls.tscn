@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3 uid="uid://moving_spike_walls"]
+
+[ext_resource type="Script" path="res://scripts/MovingSpikeWalls.gd" id="1_spike"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_base"]
+size = Vector2(64, 16)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_spikes"]
+size = Vector2(64, 8)
+
+[node name="MovingSpikeWalls" type="StaticBody2D"]
+script = ExtResource("1_spike")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_base")
+
+[node name="SpikeBody" type="Node2D" parent="."]
+
+[node name="Sprite2D" type="Sprite2D" parent="SpikeBody"]
+region_enabled = true
+region_rect = Rect2(0, 0, 64, 16)
+
+[node name="DamageArea" type="Area2D" parent="SpikeBody"]
+monitoring = false
+monitorable = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SpikeBody/DamageArea"]
+shape = SubResource("RectangleShape2D_spikes")

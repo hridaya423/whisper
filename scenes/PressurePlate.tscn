@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3 uid="uid://pressure_plate_scene"]
+
+[ext_resource type="Script" path="res://scripts/PressurePlate.gd" id="1_plate"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_plate"]
+size = Vector2(32, 8)
+
+[node name="PressurePlate" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1_plate")

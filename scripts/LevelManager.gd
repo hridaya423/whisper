@@ -13,9 +13,9 @@ var levels = [
 	{"number": 4, "distance": 5500, "message": "Impressive... for a mortal. Level 4 survived, but the darkness hungers for your failure."},
 	{"number": 5, "distance": 8000, "message": "You think you've won? *Hah!* The final level is complete... but this is only the beginning of your torment."},
 ]
-@onready var player = $"../Player"
-@onready var ui_layer = $"../CanvasLayer"
-@onready var camera = $"../Player/Camera2D"
+@onready var player = get_node_or_null("../Player")
+@onready var ui_layer = get_node_or_null("../CanvasLayer")
+@onready var camera = get_node_or_null("../Player/Camera2D") if player else null
 var level_message_container: Control
 var level_message_label: RichTextLabel
 var screen_overlay: ColorRect
@@ -48,9 +48,9 @@ var original_camera_offset: Vector2
 var flicker_timer: Timer
 var is_flickering: bool = false
 func _ready():
-	if player:
+	if player and is_instance_valid(player):
 		player_start_position = player.global_position
-	if camera:
+	if camera and is_instance_valid(camera):
 		original_camera_offset = camera.offset
 	_setup_ui()
 	_setup_audio()
@@ -58,12 +58,12 @@ func _ready():
 	show_level_message.connect(_display_level_message)
 	_play_dialogue_delayed("presse", 2.0)
 func _process(delta):
-	if shake_strength > 0 and camera:
+	if shake_strength > 0 and camera and is_instance_valid(camera):
 		shake_strength = max(shake_strength - shake_fade * delta, 0)
 		camera.offset = original_camera_offset + _get_random_shake_offset()
 	if time_frozen:
 		return
-	if not player or level_complete:
+	if not player or not is_instance_valid(player) or level_complete:
 		return
 	var current_distance = player.global_position.x - player_start_position.x
 	distance_traveled = max(0, current_distance)
@@ -81,15 +81,24 @@ func _check_level_progress():
 		level_complete = true
 		_on_level_completed(current_level)
 func _on_level_completed(level_num):
+	await _wait_for_player_to_settle()
+	if not is_instance_valid(self):
+		return
 	_freeze_time()
 	_apply_screen_shake(30.0)
 	_start_atmospheric_effects()
 	await get_tree().create_timer(0.5).timeout
+	if not is_instance_valid(self):
+		return
 	var message = levels[level_num - 1]["message"]
 	emit_signal("show_level_message", message)
 	_play_dialogue("level" + str(level_num))
 	await get_tree().create_timer(len(message) * (typewriter_speed + character_variation) + 3.0).timeout
+	if not is_instance_valid(self):
+		return
 	await _fade_out_message()
+	if not is_instance_valid(self):
+		return
 	_stop_atmospheric_effects()
 	emit_signal("level_completed", level_num)
 	_unfreeze_time()
@@ -100,7 +109,7 @@ func _freeze_time():
 	if ui_layer:
 		ui_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	self.process_mode = Node.PROCESS_MODE_ALWAYS
-	if player and player.has_method("set_physics_process"):
+	if player and is_instance_valid(player) and player.has_method("set_physics_process"):
 		player.set_physics_process(false)
 		player.set_process(false)
 	if screen_overlay:
@@ -262,6 +271,12 @@ func _play_dialogue(dialogue_key: String):
 		var audio_stream = load(audio_path)
 		dialogue_player.stream = audio_stream
 		dialogue_player.play()
+		var dialogue_duration := 4.0
+		if audio_stream and audio_stream.has_method("get_length"):
+			var stream_length := float(audio_stream.get_length())
+			if stream_length > 0.1:
+				dialogue_duration = max(stream_length, 2.5)
+		LightMoth.show_global_dialogue(_format_dialogue_caption(dialogue_key), dialogue_duration)
 		dialogue_played[dialogue_key] = true
 func stop_dialogue():
 	if dialogue_player and dialogue_player.playing:
@@ -269,3 +284,37 @@ func stop_dialogue():
 func _play_dialogue_delayed(dialogue_key: String, delay: float):
 	await get_tree().create_timer(delay).timeout
 	_play_dialogue(dialogue_key)
+
+func _format_dialogue_caption(dialogue_key: String) -> String:
+	match dialogue_key:
+		"presse":
+			return "Press E, to explore into the secrets of the darkness, quick or you might end up like us."
+	
+	var readable = dialogue_key.replace("_", " ").replace("-", " ")
+	var parts: PackedStringArray = readable.split(" ", false)
+	var capitalized: Array[String] = []
+	for part in parts:
+		if part.is_empty():
+			continue
+		capitalized.append(part.capitalize())
+	var joined := " ".join(capitalized)
+	if joined.is_empty():
+		joined = dialogue_key.capitalize()
+	return "Listening: " + joined.strip_edges()
+func _wait_for_player_to_settle():
+	if not player or not is_instance_valid(player):
+		return
+	if not (player is CharacterBody2D):
+		return
+	var character := player as CharacterBody2D
+	var max_wait_time := 2.0
+	var waited := 0.0
+	var physics_step: float = 1.0 / max(1.0, float(Engine.get_physics_ticks_per_second()))
+	while waited < max_wait_time:
+		if not is_instance_valid(character):
+			return
+		var vertical_speed := character.velocity.y
+		if character.is_on_floor() and abs(vertical_speed) <= 1.0:
+			return
+		await get_tree().physics_frame
+		waited += physics_step

@@ -1,0 +1,61 @@
+[gd_scene load_steps=4 format=3 uid="uid://da2yan3gkokbp"]
+
+[ext_resource type="Script" uid="uid://41w4qqwpsbhe" path="res://scripts/ui/PauseMenu.gd" id="1_wg63v"]
+[ext_resource type="FontFile" uid="uid://cilxm5ndn5l0y" path="res://assets/fonts/October Crow.ttf" id="2_zd6cu"]
+
+[sub_resource type="Theme" id="Theme_ws5dh"]
+default_font = ExtResource("2_zd6cu")
+default_font_size = 28
+
+[node name="PauseMenu" type="CanvasLayer"]
+process_mode = 2
+layer = 210
+script = ExtResource("1_wg63v")
+resume_button_path = NodePath("Panel/MenuContainer/ResumeButton")
+restart_button_path = NodePath("Panel/MenuContainer/RestartButton")
+quit_button_path = NodePath("Panel/MenuContainer/QuitButton")
+
+[node name="Panel" type="Panel" parent="."]
+modulate = Color(0.18, 0.18, 0.22, 0.7)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="MenuContainer" type="VBoxContainer" parent="Panel"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -200.0
+offset_right = 150.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_ws5dh")
+alignment = 1
+
+[node name="Title" type="Label" parent="Panel/MenuContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "PAUSED"
+horizontal_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="Panel/MenuContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "Resume"
+
+[node name="RestartButton" type="Button" parent="Panel/MenuContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "Restart Level"
+
+[node name="QuitButton" type="Button" parent="Panel/MenuContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "Quit to Menu"

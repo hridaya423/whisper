@@ -37,8 +37,8 @@ func _ready():
 			if "Player" in child.name:
 				player = child
 				break
-	var game_manager = get_node("../GameManager")
-	if game_manager and game_manager.has_signal("player_sonar_pulse"):
+	var game_manager = get_node_or_null("../GameManager")
+	if game_manager and is_instance_valid(game_manager) and game_manager.has_signal("player_sonar_pulse"):
 		game_manager.player_sonar_pulse.connect(_on_sonar_detected)
 	_setup_damage_area()
 	z_index = 100
@@ -77,7 +77,7 @@ func _physics_process(delta):
 		unreachable_timer -= delta
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
-	if player:
+	if player and is_instance_valid(player):
 		var distance_to_player = global_position.distance_to(player.global_position)
 		var effective_attack_range = ATTACK_RANGE * attack_range_multiplier
 		if has_line_of_sight_to_player():
@@ -285,8 +285,9 @@ func _on_sonar_detected(position: Vector2, range: float, direction: Vector2):
 func _on_player_touch(body):
 	if body.name == "Player" and body.has_method("take_damage"):
 		body.take_damage()
-func take_damage():
-	health -= 1
+func take_damage(amount: int = 1, hit_position: Vector2 = Vector2.INF, config: Dictionary = {}):
+	amount = max(1, int(amount))
+	health -= amount
 	if sprite:
 		var tween = create_tween()
 		tween.tween_property(sprite, "modulate", Color.RED, 0.1)
@@ -305,9 +306,13 @@ func die():
 		tween.parallel().tween_property(self, "position:y", position.y - 50, 0.6)
 		await tween.finished
 		await get_tree().create_timer(0.5).timeout
+		if not is_instance_valid(self):
+			return
 		queue_free()
 	else:
 		await get_tree().create_timer(2.0).timeout
+		if not is_instance_valid(self):
+			return
 		queue_free()
 func play_attack_sound():
 	if attack_audio and attack_audio.stream:

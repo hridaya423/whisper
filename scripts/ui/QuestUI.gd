@@ -18,6 +18,15 @@ var active_quest_container: VBoxContainer
 var quest_containers: Dictionary = {}
 var is_showing: bool = false
 var available_quests: Array[QuestData] = []
+var _player_node: Node = null
+var _ui_layer_node: Node = null
+var _cached_tree_paused: bool = false
+var _cached_process_mode: int = Node.PROCESS_MODE_INHERIT
+var _cached_ui_process_mode: int = Node.PROCESS_MODE_INHERIT
+var _cached_player_process: bool = true
+var _cached_player_physics: bool = true
+var _player_state_cached: bool = false
+var _gameplay_frozen: bool = false
 signal quest_selected(quest: QuestData)
 signal quest_ui_closed()
 func _ready():
@@ -26,6 +35,7 @@ func _ready():
 	_setup_improved_ui()
 	_setup_active_quest_display()
 	hide_quest_panel()
+	_ui_layer_node = _find_ui_layer()
 	set_process(true)
 func set_quest_system_reference(qs: QuestSystem):
 	quest_system = qs
@@ -173,6 +183,63 @@ func _on_quests_offered(quests):
 	for quest in quests:
 		available_quests.append(quest)
 	show_quest_panel()
+func _find_ui_layer() -> Node:
+	var parent_node = get_parent()
+	if parent_node:
+		return parent_node
+	if get_tree() and get_tree().current_scene:
+		return get_tree().current_scene.get_node_or_null("CanvasLayer")
+	return null
+func _get_player() -> Node:
+	if _player_node and is_instance_valid(_player_node):
+		return _player_node
+	var player_group = get_tree().get_nodes_in_group("player")
+	if player_group.size() > 0:
+		_player_node = player_group[0]
+		return _player_node
+	if get_tree().current_scene:
+		var candidate = get_tree().current_scene.get_node_or_null("Player")
+		if candidate:
+			_player_node = candidate
+	return _player_node
+func _freeze_gameplay():
+	if _gameplay_frozen:
+		return
+	_gameplay_frozen = true
+	_cached_tree_paused = get_tree().paused
+	_cached_process_mode = process_mode
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	var ui_layer = _find_ui_layer()
+	if ui_layer and is_instance_valid(ui_layer):
+		_ui_layer_node = ui_layer
+		_cached_ui_process_mode = ui_layer.process_mode
+		ui_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	else:
+		_ui_layer_node = null
+	var player_ref = _get_player()
+	if player_ref and is_instance_valid(player_ref):
+		_cached_player_physics = player_ref.is_physics_processing()
+		_cached_player_process = player_ref.is_processing()
+		player_ref.set_physics_process(false)
+		player_ref.set_process(false)
+		_player_state_cached = true
+	else:
+		_player_state_cached = false
+	get_tree().paused = true
+func _resume_gameplay():
+	if not _gameplay_frozen:
+		return
+	_gameplay_frozen = false
+	get_tree().paused = _cached_tree_paused
+	process_mode = _cached_process_mode
+	if _ui_layer_node and is_instance_valid(_ui_layer_node):
+		_ui_layer_node.process_mode = _cached_ui_process_mode
+	if _player_state_cached:
+		var player_ref = _get_player()
+		if player_ref and is_instance_valid(player_ref):
+			player_ref.set_physics_process(_cached_player_physics)
+			player_ref.set_process(_cached_player_process)
+		_player_state_cached = false
 func _populate_quest_list():
 	for child in quest_list.get_children():
 		child.queue_free()
@@ -188,13 +255,20 @@ func show_quest_panel():
 	quest_panel.visible = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_populate_quest_list()
-	get_tree().paused = true
-	process_mode = Node.PROCESS_MODE_ALWAYS
+	_freeze_gameplay()
 func hide_quest_panel():
+	if not quest_panel:
+		return
+	if not is_showing:
+		quest_panel.visible = false
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if _gameplay_frozen:
+			_resume_gameplay()
+		return
 	is_showing = false
 	quest_panel.visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	get_tree().paused = false
+	_resume_gameplay()
 func _on_quest_accepted(quest: QuestData):
 	if quest_system and quest_system.accept_quest(quest):
 		quest_selected.emit(quest)

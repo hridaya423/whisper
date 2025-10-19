@@ -46,12 +46,14 @@ func _on_body_exited(body):
 func _activate_crystal(player: Player):
 	if not is_active or is_recharging:
 		return
+	if not player or not is_instance_valid(player):
+		return
 	player.heal(heal_amount)
 	_grant_power_up(player)
 	is_active = false
 	is_recharging = true
 	recharge_timer = recharge_time
-	if activation_audio:
+	if activation_audio and is_instance_valid(activation_audio):
 		activation_audio.play()
 	play_crystal_dialogue()
 	crystal_activated.emit(heal_amount, power_up_duration)
@@ -74,4 +76,10 @@ func play_crystal_dialogue():
 		dialogue_player.stream = audio_stream
 		dialogue_player.play()
 		dialogue_played = true
+		var dialogue_duration := 4.0
+		if audio_stream and audio_stream.has_method("get_length"):
+			var stream_length := float(audio_stream.get_length())
+			if stream_length > 0.1:
+				dialogue_duration = max(stream_length, 2.5)
+		LightMoth.show_global_dialogue("Crystal resonance humming...", dialogue_duration)
 		print("Playing crystal dialogue")

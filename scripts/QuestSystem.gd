@@ -37,6 +37,7 @@ var runes_collected_this_session: int = 0
 var next_quest_level: int = 0
 var dialogue_player: AudioStreamPlayer
 var dialogue_played = false
+static var quest_dialogue_played_global: bool = false
 var active_penalties: Dictionary = {}
 var health_drain_timer: float = 0.0
 var health_drain_interval: float = 8.0
@@ -77,13 +78,13 @@ func _find_node_by_name(node: Node, name: String) -> Node:
 			return result
 	return null
 func _connect_signals():
-	if level_manager and level_manager.has_signal("level_completed"):
+	if level_manager and is_instance_valid(level_manager) and level_manager.has_signal("level_completed"):
 		level_manager.level_completed.connect(_on_level_completed)
 	var enemies = get_tree().get_nodes_in_group("enemies")
 	for enemy in enemies:
-		if enemy.has_signal("enemy_died"):
+		if enemy and is_instance_valid(enemy) and enemy.has_signal("enemy_died"):
 			enemy.enemy_died.connect(_on_enemy_killed)
-	if rune_system and rune_system.has_signal("rune_collected"):
+	if rune_system and is_instance_valid(rune_system) and rune_system.has_signal("rune_collected"):
 		rune_system.rune_collected.connect(_on_rune_collected)
 func _process(delta):
 	_update_survival_quests(delta)
@@ -530,7 +531,7 @@ func _setup_dialogue():
 	add_child(dialogue_player)
 	dialogue_player.volume_db = -5
 func _play_quest_dialogue():
-	if dialogue_played:
+	if dialogue_played or quest_dialogue_played_global:
 		return
 	var audio_path = "res://assets/dialogue/quests.mp3"
 	if ResourceLoader.exists(audio_path):
@@ -538,3 +539,10 @@ func _play_quest_dialogue():
 		dialogue_player.stream = audio_stream
 		dialogue_player.play()
 		dialogue_played = true
+		quest_dialogue_played_global = true
+		var dialogue_duration := 4.0
+		if audio_stream and audio_stream.has_method("get_length"):
+			var stream_length := float(audio_stream.get_length())
+			if stream_length > 0.1:
+				dialogue_duration = max(stream_length, 2.5)
+		LightMoth.show_global_dialogue("New quest directives received", dialogue_duration)

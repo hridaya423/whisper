@@ -46,6 +46,39 @@ aim_mode={
 "type": "mouse_button"
 }]
 }
+open_synergy={
+"deadzone": 0.5,
+"events": [{
+"device": -1,
+"echo": false,
+"keycode": 0,
+"physical_keycode": 83,
+"pressed": false,
+"type": "input_event_key"
+}]
+}
+melee_attack={
+"deadzone": 0.5,
+"events": [{
+"device": -1,
+"echo": false,
+"keycode": 0,
+"physical_keycode": 67,
+"pressed": false,
+"type": "input_event_key"
+}]
+}
+parry={
+"deadzone": 0.5,
+"events": [{
+"device": -1,
+"echo": false,
+"keycode": 0,
+"physical_keycode": 70,
+"pressed": false,
+"type": "input_event_key"
+}]
+}
 
 [layer_names]
 

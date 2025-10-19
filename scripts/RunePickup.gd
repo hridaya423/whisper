@@ -8,6 +8,7 @@ var time_offset: float
 var audio_player: AudioStreamPlayer2D
 var dialogue_player: AudioStreamPlayer2D
 var dialogue_played = false
+static var rune_dialogue_played_global: bool = false
 func _ready():
 	var paths_to_try = [
 		"../../RuneSystem",
@@ -57,7 +58,7 @@ func setup_dialogue():
 	add_child(dialogue_player)
 	dialogue_player.volume_db = -5
 func play_rune_dialogue():
-	if dialogue_played:
+	if dialogue_played or rune_dialogue_played_global:
 		return
 	var audio_path = "res://assets/dialogue/runes.mp3"
 	if ResourceLoader.exists(audio_path):
@@ -65,6 +66,14 @@ func play_rune_dialogue():
 		dialogue_player.stream = audio_stream
 		dialogue_player.play()
 		dialogue_played = true
+		rune_dialogue_played_global = true
+		var dialogue_duration := 4.0
+		if audio_stream and audio_stream.has_method("get_length"):
+			var stream_length := float(audio_stream.get_length())
+			if stream_length > 0.1:
+				dialogue_duration = max(stream_length, 2.5)
+		var caption = "These runes are memory chips from the old beacon cores. It whispers..."
+		LightMoth.show_global_dialogue(caption, dialogue_duration)
 		print("Playing rune dialogue")
 var player_nearby = false
 var current_player = null
@@ -82,7 +91,7 @@ func _process(delta):
 		collect_rune()
 func check_player_proximity():
 	var player = get_tree().get_first_node_in_group("player")
-	if player == null:
+	if player == null or not is_instance_valid(player):
 		player_nearby = false
 		current_player = null
 		return
@@ -180,6 +189,16 @@ func play_pickup_sound():
 	print("Pickup sound plays!")
 func play_pickup_animation():
 	var camera = get_viewport().get_camera_2d()
+
+	var player = get_tree().get_first_node_in_group("player")
+	var player_was_processing = false
+	if player:
+		player_was_processing = player.is_processing()
+		player.set_process(false)
+		player.set_physics_process(false)
+		if player.has_method("set") and "velocity" in player:
+			player.velocity = Vector2.ZERO
+
 	Engine.time_scale = 0.2
 	var tween1 = create_tween()
 	tween1.set_parallel(true)
@@ -195,6 +214,10 @@ func play_pickup_animation():
 	tween2.tween_property(self, "modulate:a", 0.0, 0.15)
 	await tween2.finished
 	Engine.time_scale = 1.0
+
+	if player and player_was_processing:
+		player.set_process(true)
+		player.set_physics_process(true)
 func _apply_screen_shake(camera: Camera2D, duration: float):
 	var original_offset = camera.offset
 	var intensity = float(SettingsManager.get_setting(SettingsManager.SECTION_GAMEPLAY, "screen_shake_intensity", 1.0))

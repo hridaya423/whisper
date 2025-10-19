@@ -4,12 +4,12 @@ const BUTTON_MIN_WIDTH = 300
 const BUTTON_MIN_HEIGHT = 55
 const SLIDER_MIN_WIDTH = 360
 const SLIDER_MIN_HEIGHT = 30
-const COLOR_NORMAL = Color(0.7, 0.7, 0.7, 0.7)
-const COLOR_HOVER = Color(0.8, 0.1, 0.1, 1.0)
+const COLOR_NORMAL = Color(1.0, 1.0, 1.0, 1.0)
+const COLOR_HOVER = Color(1.0, 1.0, 1.0, 1.0)
 const COLOR_PRESSED = Color(0.8, 0.1, 0.1, 1.0)
-const COLOR_ACTIVE_FONT = Color(1.0, 0.85, 0.85, 1.0)
-const COLOR_ACTIVE_HOVER = Color(1.0, 0.95, 0.95, 1.0)
-const COLOR_ACTIVE_PRESSED = Color(1.0, 0.9, 0.9, 1.0)
+const COLOR_ACTIVE_FONT = Color(1.0, 1.0, 1.0, 1.0)
+const COLOR_ACTIVE_HOVER = Color(1.0, 1.0, 1.0, 1.0)
+const COLOR_ACTIVE_PRESSED = Color(1.0, 1.0, 1.0, 1.0)
 const TOGGLE_ACTIVE_MODULATE = Color(1.05, 0.75, 0.75, 1.0)
 const MAIN_MENU_SCENE = "res://scenes/ui/MainMenu.tscn"
 const SCARY_FONT = preload("res://assets/fonts/October Crow.ttf")
@@ -429,7 +429,7 @@ func create_slider_grabber_highlight_stylebox() -> StyleBoxFlat:
 	return style
 func create_button_normal_stylebox() -> StyleBoxFlat:
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0)
+	style.bg_color = Color(0, 0, 0, 0.5)
 	style.border_width_left = 2
 	style.border_color = Color(0.3, 0.3, 0.3, 0.3)
 	style.content_margin_left = 30
@@ -439,7 +439,7 @@ func create_button_normal_stylebox() -> StyleBoxFlat:
 	return style
 func create_button_hover_stylebox() -> StyleBoxFlat:
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.15, 0.15, 0.3)
+	style.bg_color = Color(0, 0, 0, 0.7)
 	style.border_width_left = 3
 	style.border_width_right = 1
 	style.border_color = Color(1.0, 1.0, 1.0, 0.4)

@@ -30,7 +30,7 @@ func _ready():
 func _setup_references():
 	player = get_tree().get_first_node_in_group("player")
 	reward_system = _find_node_by_name(get_tree().current_scene, "RewardSystem")
-	if reward_system:
+	if reward_system and is_instance_valid(reward_system):
 		reward_system.medkit_system = self
 func _find_node_by_name(node: Node, name: String) -> Node:
 	if node.name == name:
@@ -41,7 +41,7 @@ func _find_node_by_name(node: Node, name: String) -> Node:
 			return result
 	return null
 func _setup_ui():
-	if not player:
+	if not player or not is_instance_valid(player):
 		return
 	medkit_ui_container = Control.new()
 	medkit_ui_container.name = "MedkitUIContainer"
@@ -50,7 +50,7 @@ func _setup_ui():
 	medkit_ui_container.size = Vector2(220, 70)
 	medkit_ui_container.visible = false
 	var ui_layer = player.get_node_or_null("health_ui_layer")
-	if ui_layer:
+	if ui_layer and is_instance_valid(ui_layer):
 		ui_layer.add_child(medkit_ui_container)
 	else:
 		var health_ui_layer = CanvasLayer.new()
@@ -352,7 +352,7 @@ func _animate_notification(notification: Control):
 	tween.set_parallel(true)
 	tween.tween_property(notification, "modulate:a", 1.0, 0.2)
 	tween.tween_property(notification, "position:y", notification.position.y + 20, 0.2)
-	tween.tween_delay(1.5)
+	tween.tween_interval(1.5)
 	tween.tween_property(notification, "modulate:a", 0.0, 0.3)
 	tween.tween_property(notification, "position:y", notification.position.y - 10, 0.3)
 	await tween.finished

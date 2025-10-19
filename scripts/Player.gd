@@ -6,19 +6,45 @@ const SONAR_COOLDOWN = 2.0
 const SONAR_RANGE = 150.0
 const MIN_LANDING_VELOCITY = 150.0
 const ATTACK_COOLDOWN = 0.5
+const MELEE_COOLDOWN = 0.7
+const MELEE_CHARGE_TIME = 1.0
+const MELEE_WAVE_SPEED = 400.0
+const MELEE_WAVE_DAMAGE_MULTIPLIER = 2.0
+const MELEE_ATTACK_RESOURCE := preload("res://scripts/MeleeAttack.gd")
+const PARRY_CLANG_SOUND := preload("res://assets/sfx/playerattack.mp3")
+const PAUSE_MENU_SCENE := preload("res://scenes/ui/PauseMenu.tscn")
 const DASH_SPEED = 600.0
 const DASH_DURATION = 0.2
 const DASH_COOLDOWN = 4.5
+const SLIDE_SPEED = 350.0
+const SLIDE_DURATION = 0.6
+const SLIDE_FRICTION = 0.92
+const SLIDE_JUMP_BOOST = 1.5
+const MIN_SLIDE_SPEED = 50.0 
 var MAX_HEALTH = 10
 var sonar_timer = 0.0
 var sonar_cooldown_duration = SONAR_COOLDOWN
 var attack_timer = 0.0
+var melee_attack_timer = 0.0
+var melee_charge_time = 0.0
+var is_charging_melee = false
+var melee_charge_arc: Line2D 
+var melee_charge_particles: CPUParticles2D
 var dash_timer = 0.0
 var can_sonar = true
 var can_attack = true
+var can_melee_attack = true
 var can_dash = true
 var is_dashing = false
+var is_sliding = false
+var slide_timer = 0.0
+var slide_particles: CPUParticles2D
 var dash_direction = Vector2.ZERO
+var dash_speed_override: float = DASH_SPEED
+var _external_dash_active: bool = false
+var _external_dash_reset_cooldown: bool = false
+var _cached_can_dash: bool = true
+var _cached_dash_timer: float = 0.0
 var jump_count = 0
 var max_jumps = 2
 var has_double_jump = true
@@ -40,6 +66,8 @@ var min_charge_time = 0.3
 var charge_particles: CPUParticles2D
 var charge_indicator: Sprite2D
 var e_key_was_pressed = false
+var s_key_was_pressed = false
+var x_key_was_pressed = false
 var health = MAX_HEALTH
 var invulnerable = false
 var invulnerable_timer = 0.0
@@ -74,12 +102,16 @@ var sonar_indicator: TextureRect
 var medkit_system: Node
 var reward_system: Node
 var quest_system: Node
+var synergy_ui: CanvasLayer
 var damage_camera_zoom_active: bool = false
 var original_camera_zoom: float = 1.0
 var camera_breathing_tween: Tween
 var critical_health_shake_tween: Tween
+var damage_hit_shake_tween: Tween
+var dramatic_shake_tween: Tween
 var breathing_camera: Camera2D
 var shake_camera: Camera2D
+var dramatic_camera: Camera2D
 var dash_trail_particles: CPUParticles2D
 var footstep_particles: CPUParticles2D
 var jump_buffer_timer: float = 0.0
@@ -90,6 +122,21 @@ const ATTACK_BUFFER_TIME: float = 0.2
 const DASH_BUFFER_TIME: float = 0.15
 var environment_speed_modifiers: Dictionary[int, float] = {}
 var environment_speed_multiplier: float = 1.0
+var camera_breath_offset: Vector2 = Vector2.ZERO
+var camera_critical_offset: Vector2 = Vector2.ZERO
+var camera_damage_hit_offset: Vector2 = Vector2.ZERO
+var camera_dramatic_offset: Vector2 = Vector2.ZERO
+var parry_system: ParrySystem
+var parry_audio: AudioStreamPlayer2D
+var parry_shield_effect: Node2D
+var _prev_melee_key_pressed: bool = false
+var _prev_parry_key_pressed: bool = false
+var damage_effect_layer: CanvasLayer
+var chromatic_rect: ColorRect
+var chromatic_tween: Tween
+var pause_menu: PauseMenu
+var is_pause_menu_active: bool = false
+var stored_mouse_mode: int = Input.MOUSE_MODE_VISIBLE
 @export var light_projectile_scene: PackedScene
 @export var corruption_start_time: float = 20.0
 @export var corruption_tick_interval: float = 1.0
@@ -104,16 +151,20 @@ var corruption_active: bool = false
 var corruption_tick_timer: float = 0.0
 var corruption_damage: int = 1
 var corruption_tween: Tween
+var _speed_debuff_multiplier: float = 1.0
+var _speed_debuff_timer: float = 0.0
 @onready var footstep_audio: AudioStreamPlayer2D = $FootstepAudio
 @onready var landing_audio: AudioStreamPlayer2D = $LandingAudio
 @onready var sonar_audio: AudioStreamPlayer2D = $SonarAudio
 @onready var attack_audio: AudioStreamPlayer2D = $AttackAudio
 @onready var sprite: Sprite2D = $Sprite2D
+@onready var collision_shape: CollisionShape2D = $CollisionShape2D
 signal sonar_pulse_emitted(position: Vector2, range: float, direction: Vector2)
 signal player_died
 func _ready():
 	z_index = 101
 	add_to_group("player")
+	stored_mouse_mode = Input.get_mouse_mode()
 	_load_animation_textures()
 	var game_manager = get_node_or_null("../GameManager")
 	if game_manager and game_manager.has_method("_on_player_sonar_pulse"):
@@ -128,10 +179,20 @@ func _ready():
 	_setup_sonar_indicator()
 	_update_health_ui()
 	_update_rune_ui()
+	_update_camera_combined_offset()
+	_initialize_parry_system()
+	_ensure_input_actions()
+	_setup_pause_menu()
 func _setup_health_ui():
 	health_ui_layer = CanvasLayer.new()
 	health_ui_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(health_ui_layer)
+
+	damage_effect_layer = CanvasLayer.new()
+	damage_effect_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	damage_effect_layer.layer = 200
+	add_child(damage_effect_layer)
+
 	var health_container = Control.new()
 	health_container.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	health_container.position = Vector2(20, -60)
@@ -257,6 +318,12 @@ func _physics_process(delta):
 		attack_timer -= delta
 		if attack_timer <= 0:
 			can_attack = true
+			attack_timer = 0.0
+	if not can_melee_attack:
+		melee_attack_timer -= delta
+		if melee_attack_timer <= 0:
+			can_melee_attack = true
+			melee_attack_timer = 0.0
 	if !can_dash:
 		dash_timer -= delta
 		if dash_timer <= 0:
@@ -279,6 +346,12 @@ func _physics_process(delta):
 		else:
 			var flash = sin(invulnerable_timer * 20.0)
 			modulate.a = 0.5 + abs(flash) * 0.5
+
+	if _speed_debuff_timer > 0:
+		_speed_debuff_timer -= delta
+		if _speed_debuff_timer <= 0:
+			_speed_debuff_multiplier = 1.0
+			_speed_debuff_timer = 0.0
 	if not is_on_floor():
 		velocity.y += gravity * delta
 	else:
@@ -287,7 +360,10 @@ func _physics_process(delta):
 		jump_buffer_timer = JUMP_BUFFER_TIME
 	if jump_buffer_timer > 0:
 		if is_on_floor():
-			velocity.y = JUMP_VELOCITY * crystal_jump_boost
+			var jump_boost = SLIDE_JUMP_BOOST if is_sliding else 1.0
+			velocity.y = JUMP_VELOCITY * crystal_jump_boost * jump_boost
+			if is_sliding:
+				_end_slide()
 			jump_count = 1
 			jump_buffer_timer = 0.0
 		elif has_double_jump and jump_count < max_jumps:
@@ -304,10 +380,19 @@ func _physics_process(delta):
 		sonar_direction = stored_aim_direction
 		emit_sonar_pulse()
 		sonar_direction = temp_direction
+	if Input.is_action_just_pressed("pause_game"
+		var quest_ui = get_node_or_null("../QuestUI")
+		if quest_ui and quest_ui.is_showing:
+			return
+		if get_tree().paused:
+			_resume_game()
+		else:
+			_pause_game()
+		return
 	var e_pressed = Input.is_physical_key_pressed(KEY_E)
 	var e_just_pressed = e_pressed and not e_key_was_pressed
 	e_key_was_pressed = e_pressed
-	if (Input.is_action_just_pressed("ui_accept") or e_just_pressed) and can_sonar:
+	if e_just_pressed and can_sonar:
 		emit_sonar_pulse()
 	was_aiming_last_frame = is_aiming_mode
 	_handle_charging_attack()
@@ -329,6 +414,37 @@ func _physics_process(delta):
 		_activate_rune_slot(1)
 	elif Input.is_action_just_pressed("slot_3"):
 		_activate_rune_slot(2)
+	var s_pressed = Input.is_physical_key_pressed(KEY_S)
+	var s_just_pressed = s_pressed and not s_key_was_pressed
+	s_key_was_pressed = s_pressed
+	if s_just_pressed:
+		_open_synergy_menu()
+
+	var x_pressed = Input.is_physical_key_pressed(KEY_X)
+	var x_just_pressed = x_pressed and not x_key_was_pressed
+	x_key_was_pressed = x_pressed
+	if x_just_pressed:
+		var synergy_system = get_node("../RuneSynergy")
+		if synergy_system and synergy_system.has_active_synergy():
+			synergy_system.use_synergy()
+	var parry_pressed := Input.is_action_just_pressed("parry")
+	var parry_key_down := Input.is_physical_key_pressed(KEY_F)
+	if parry_key_down and not _prev_parry_key_pressed:
+		parry_pressed = true
+	_prev_parry_key_pressed = parry_key_down
+	if parry_pressed:
+		_attempt_parry()
+	var melee_key_down := Input.is_physical_key_pressed(KEY_C)
+	var melee_just_pressed = melee_key_down and not _prev_melee_key_pressed
+	var melee_just_released = not melee_key_down and _prev_melee_key_pressed
+	_prev_melee_key_pressed = melee_key_down
+
+	if melee_just_pressed and can_melee_attack:
+		_start_melee_charge()
+	elif is_charging_melee and melee_key_down:
+		_update_melee_charge(delta)
+	elif melee_just_released and is_charging_melee:
+		_release_melee_charge()
 	var direction_input = Input.get_axis("move_left", "move_right")
 	var direction = 0
 	if direction_input < 0:
@@ -337,8 +453,23 @@ func _physics_process(delta):
 		direction = 1
 	var is_moving = direction != 0 and is_on_floor()
 	var effective_speed = get_effective_speed()
+
+	_handle_slide_input(delta, direction)
+
+	if is_sliding:
+		_check_slide_collision()
+
+	_physics_process_wave_movement(delta)
+
 	if is_dashing:
-		velocity.x = dash_direction.x * DASH_SPEED
+		var dash_speed := dash_speed_override if dash_speed_override > 0.0 else DASH_SPEED
+		velocity.x = dash_direction.x * dash_speed
+		if abs(dash_direction.y) > 0.0001:
+			velocity.y = dash_direction.y * dash_speed
+	elif is_sliding:
+		velocity.x *= SLIDE_FRICTION
+		if abs(velocity.x) < MIN_SLIDE_SPEED:
+			_end_slide()
 	elif direction != 0:
 		velocity.x = direction * effective_speed
 		facing_direction = Vector2.RIGHT if direction > 0 else Vector2.LEFT
@@ -355,12 +486,41 @@ func _physics_process(delta):
 		return
 	last_velocity_y = velocity.y
 	was_on_floor = is_on_floor()
+
+	_apply_wind_forces()
+
 	move_and_slide()
 	_handle_corruption(delta)
+func _apply_wind_forces() -> void:
+	var wind_tunnels = get_tree().get_nodes_in_group("wind_tunnels")
+	for tunnel in wind_tunnels:
+		if tunnel.has_method("is_body_in_wind") and tunnel.is_body_in_wind(self):
+			var wind_force: Vector2 = tunnel.get_wind_force_at_position(self, global_position)
+
+			velocity += wind_force
+			var wind_dir: Vector2 = tunnel.wind_direction.normalized()
+			var movement_dir: Vector2 = Vector2(
+				Input.get_axis("move_left", "move_right"),
+				0
+			)
+
+			if movement_dir.length() > 0.1:
+				var alignment: float = movement_dir.normalized().dot(wind_dir)
+				if alignment > 0.7:
+					velocity.x *= 1.4
+				elif alignment < -0.7:
+					velocity.x *= 0.7
+
+func apply_speed_debuff(reduction: float, duration: float) -> void:
+	_speed_debuff_multiplier = 1.0 - reduction 
+	_speed_debuff_timer = duration
+
 func _is_idle_on_floor() -> bool:
 	return is_on_floor() and abs(velocity.x) <= idle_speed_threshold and abs(velocity.y) < 0.01
 func _handle_corruption(delta: float) -> void:
 	if health <= 0:
+		return
+	if get_tree().paused:
 		return
 	if not corruption_active:
 		if _is_idle_on_floor():
@@ -411,6 +571,7 @@ func _update_sonar_direction():
 	if mouse_aim:
 		mouse_aim_active = true
 		is_aiming_mode = true
+		_update_camera_combined_offset()
 		var mouse_pos = get_global_mouse_position()
 		var player_pos = global_position
 		var direction_to_mouse = (mouse_pos - player_pos).normalized()
@@ -420,6 +581,7 @@ func _update_sonar_direction():
 	else:
 		mouse_aim_active = false
 		is_aiming_mode = false
+		_update_camera_combined_offset()
 		sonar_direction = facing_direction
 		_reset_camera_follow()
 func _update_camera_for_aiming(mouse_pos: Vector2):
@@ -458,6 +620,18 @@ func _update_camera_micro_effects():
 		_apply_camera_breathing(camera, ready_abilities)
 	else:
 		_stop_camera_breathing()
+
+func _get_player_camera() -> Camera2D:
+	return get_node_or_null("Camera2D")
+
+func _update_camera_combined_offset():
+	var camera = _get_player_camera()
+	if not camera:
+		return
+	if is_aiming_mode:
+		camera.offset = Vector2.ZERO
+		return
+	camera.offset = camera_breath_offset + camera_critical_offset + camera_damage_hit_offset + camera_dramatic_offset
 func _apply_camera_breathing(camera: Camera2D, ability_count: int):
 	if camera_breathing_tween and camera_breathing_tween.is_valid():
 		return
@@ -475,16 +649,14 @@ func _set_camera_breath_offset(offset_amount: float):
 	var time = Time.get_ticks_msec() * 0.001
 	var x_offset = sin(time * 0.8) * offset_amount
 	var y_offset = cos(time * 0.6) * offset_amount * 0.7
-	if not is_aiming_mode:
-		breathing_camera.offset = Vector2(x_offset, y_offset)
+	camera_breath_offset = Vector2(x_offset, y_offset)
+	_update_camera_combined_offset()
 func _stop_camera_breathing():
 	if camera_breathing_tween and camera_breathing_tween.is_valid():
 		camera_breathing_tween.kill()
 		camera_breathing_tween = null
-	var camera = get_node("Camera2D")
-	if camera and not is_aiming_mode:
-		var reset_tween = create_tween()
-		reset_tween.tween_property(camera, "offset", Vector2.ZERO, 0.3)
+	camera_breath_offset = Vector2.ZERO
+	_update_camera_combined_offset()
 func _apply_critical_health_camera_shake(camera: Camera2D):
 	if critical_health_shake_tween and critical_health_shake_tween.is_valid():
 		return
@@ -502,11 +674,14 @@ func _set_camera_critical_offset(intensity: float):
 	var time = Time.get_ticks_msec() * 0.001
 	var shake_x = sin(time * 3.2) * intensity + randf_range(-0.5, 0.5)
 	var shake_y = cos(time * 2.8) * intensity * 0.8 + randf_range(-0.3, 0.3)
-	shake_camera.offset = Vector2(shake_x, shake_y)
+	camera_critical_offset = Vector2(shake_x, shake_y)
+	_update_camera_combined_offset()
 func _stop_critical_health_camera_shake():
 	if critical_health_shake_tween and critical_health_shake_tween.is_valid():
 		critical_health_shake_tween.kill()
 		critical_health_shake_tween = null
+	camera_critical_offset = Vector2.ZERO
+	_update_camera_combined_offset()
 
 func _load_animation_textures():
 	player_base_texture = load("res://assets/sprites/player.png")
@@ -565,10 +740,13 @@ func emit_sonar_pulse():
 	if rune_system:
 		sonar_range *= rune_system.get_range_multiplier()
 	var enhanced_duration = get_effective_sonar_duration()
+	if rune_system:
+		enhanced_duration *= rune_system.get_duration_multiplier()
 	sonar_pulse_emitted.emit(global_position, sonar_range, sonar_direction)
 	var sonar_system = get_node("../SonarSystem")
-	if sonar_system and crystal_power_active:
-		sonar_system.apply_duration_boost(crystal_sonar_duration_boost)
+	if sonar_system:
+		sonar_system.glow_duration = enhanced_duration
+		sonar_system.glow_timer = enhanced_duration
 	discover_nearby_crystals()
 	_update_sonar_indicator()
 func _handle_charging_attack():
@@ -667,6 +845,49 @@ func _create_charge_indicator():
 	charge_indicator.modulate = Color(1, 1, 1, 0)
 	charge_indicator.material = CanvasItemMaterial.new()
 	charge_indicator.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+
+func _perform_melee_attack():
+	if not can_melee_attack:
+		return
+
+	can_melee_attack = false
+	melee_attack_timer = MELEE_COOLDOWN
+
+	var melee_direction := _get_melee_direction()
+	if melee_direction == Vector2.ZERO:
+		melee_direction = Vector2.RIGHT
+
+	var melee_attack: MeleeAttack = MELEE_ATTACK_RESOURCE.new()
+	add_child(melee_attack)
+	melee_attack.setup(self, melee_direction, get_effective_attack_damage())
+
+	if abs(melee_direction.x) > 0.01:
+		facing_direction = Vector2.RIGHT if melee_direction.x > 0 else Vector2.LEFT
+		update_sprite_direction()
+
+	_play_melee_feedback()
+
+func _get_melee_direction() -> Vector2:
+	var direction := Vector2.ZERO
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		direction = (get_global_mouse_position() - global_position).normalized()
+	elif stored_aim_direction.length_squared() > 0.0001:
+		direction = stored_aim_direction.normalized()
+	elif facing_direction.length_squared() > 0.0001:
+		direction = facing_direction.normalized()
+
+	if direction.length_squared() == 0:
+		return Vector2.RIGHT
+	return direction
+
+func _play_melee_feedback():
+	if sprite:
+		var melee_tween = create_tween()
+		melee_tween.tween_property(sprite, "modulate", Color(1.0, 0.85, 0.6), 0.06)
+		melee_tween.tween_property(sprite, "modulate", Color.WHITE, 0.15)
+	if attack_audio:
+		attack_audio.pitch_scale = randf_range(0.9, 1.05)
+		attack_audio.play()
 func shoot_light_projectile_at_mouse(charge_level: float = 0.0):
 	if !can_attack or !light_projectile_scene:
 		return
@@ -689,6 +910,9 @@ func shoot_light_projectile_at_mouse(charge_level: float = 0.0):
 		(projectile as Node2D).rotation = aim_direction.angle()
 	if charge_level > 0.0 and projectile.has_method("set_charge_level"):
 		projectile.set_charge_level(charge_level)
+	if projectile.has_method("set_damage_multiplier"):
+		var damage_mult = get_effective_attack_damage()
+		projectile.set_damage_multiplier(damage_mult)
 	play_attack_sound()
 func handle_footstep_audio(delta: float, is_moving: bool, step_interval: float):
 	if is_moving:
@@ -721,13 +945,19 @@ func play_attack_sound():
 	if attack_audio:
 		attack_audio.pitch_scale = randf_range(0.95, 1.05)
 		attack_audio.play()
-func take_damage():
+func take_damage(amount: int = 1) -> void:
+	amount = int(amount)
+	if amount <= 0:
+		return
 	if invulnerable:
 		return
-	health -= 1
+	health = max(health - amount, 0)
 	_update_health_ui()
 	_on_health_changed()
 	_create_damage_screen_effect()
+	var camera = _get_player_camera()
+	if camera:
+		_apply_damage_hit_camera_shake(camera)
 	_create_dramatic_damage_effect()
 	if health <= 0:
 		player_died.emit()
@@ -738,14 +968,21 @@ func take_damage():
 		tween.tween_property(self, "modulate", Color.RED, 0.1)
 		tween.tween_property(self, "modulate", Color.WHITE, 0.1)
 func _create_damage_screen_effect():
+	_spawn_damage_flash_overlay()
+
+func _spawn_damage_flash_overlay():
 	var damage_flash = ColorRect.new()
-	health_ui_layer.add_child(damage_flash)
-	damage_flash.color = Color(0.7, 0.0, 0.0, 0.6)
+	damage_effect_layer.add_child(damage_flash)
+	damage_flash.color = Color(0.7, 0.0, 0.0, 0.45)
 	damage_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var tween = damage_flash.create_tween()
-	tween.tween_property(damage_flash, "modulate:a", 0.0, 0.6)
-	tween.finished.connect(func(): damage_flash.queue_free())
+	tween.tween_property(damage_flash, "modulate:a", 0.0, 0.35)
+	tween.tween_callback(func():
+		if is_instance_valid(damage_flash):
+			damage_flash.queue_free()
+	)
+
 func _create_dramatic_damage_effect():
 	var level_manager = get_node("../LevelManager")
 	var current_level = 1
@@ -765,6 +1002,39 @@ func _create_dramatic_damage_effect():
 		_apply_dramatic_camera_shake(camera)
 	_create_damage_burst_particles()
 	_apply_damage_audio_effects()
+
+func _apply_damage_hit_camera_shake(_camera: Camera2D):
+	if damage_hit_shake_tween and damage_hit_shake_tween.is_valid():
+		damage_hit_shake_tween.kill()
+	damage_hit_shake_tween = null
+	camera_damage_hit_offset = Vector2.ZERO
+	_update_camera_combined_offset()
+
+	var effective_max_health = max(1, MAX_HEALTH)
+	var health_ratio = clamp(float(max(health, 0)) / float(effective_max_health), 0.0, 1.0)
+	var iterations = clampi(int(round(lerp(12.0, 8.0, health_ratio))), 8, 12)
+	var duration = 0.3
+	var segment_duration = duration / float(iterations)
+	var base_intensity = 4.0
+	var max_intensity = 12.0
+	var intensity = lerp(base_intensity, max_intensity, 1.0 - health_ratio)
+
+	damage_hit_shake_tween = create_tween()
+	damage_hit_shake_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	damage_hit_shake_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+	for i in range(iterations):
+		var offset = Vector2(
+			randf_range(-intensity, intensity),
+			randf_range(-intensity * 0.6, intensity * 0.6)
+		)
+		damage_hit_shake_tween.tween_callback(Callable(self, "_set_camera_damage_hit_offset").bind(offset))
+		damage_hit_shake_tween.tween_interval(segment_duration * 0.5)
+		damage_hit_shake_tween.tween_callback(Callable(self, "_set_camera_damage_hit_offset").bind(Vector2.ZERO))
+		damage_hit_shake_tween.tween_interval(segment_duration * 0.5)
+
+	damage_hit_shake_tween.tween_callback(Callable(self, "_set_camera_damage_hit_offset").bind(Vector2.ZERO))
+	damage_hit_shake_tween.tween_callback(Callable(self, "_clear_damage_hit_shake"))
 func _start_slow_motion_effect():
 	Engine.time_scale = 0.3
 	damage_camera_zoom_active = true
@@ -784,15 +1054,34 @@ func _end_slow_motion_effect():
 		var zoom_tween = create_tween()
 		zoom_tween.tween_property(camera, "zoom", Vector2(original_camera_zoom, original_camera_zoom), 0.3)
 func _apply_dramatic_camera_shake(camera: Camera2D):
+	dramatic_camera = camera
+	if dramatic_shake_tween and dramatic_shake_tween.is_valid():
+		dramatic_shake_tween.kill()
+		camera_dramatic_offset = Vector2.ZERO
+		_update_camera_combined_offset()
 	var shake_intensity = 20.0
-	var shake_duration = 0.8
-	for i in range(8):
-		var shake_tween = create_tween()
-		shake_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	var iterations = 8
+	var total_duration = 0.8
+	var segment_duration = total_duration / float(iterations)
+	dramatic_shake_tween = create_tween()
+	dramatic_shake_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	for i in range(iterations):
 		var offset = Vector2(randf_range(-shake_intensity, shake_intensity), randf_range(-shake_intensity, shake_intensity))
-		shake_tween.tween_property(camera, "offset", offset, 0.1)
-		shake_tween.tween_property(camera, "offset", Vector2.ZERO, 0.1)
-		await get_tree().create_timer(0.1, true, false, true).timeout
+		dramatic_shake_tween.tween_callback(Callable(self, "_set_camera_dramatic_offset").bind(offset))
+		dramatic_shake_tween.tween_interval(segment_duration * 0.5)
+		dramatic_shake_tween.tween_callback(Callable(self, "_set_camera_dramatic_offset").bind(Vector2.ZERO))
+		dramatic_shake_tween.tween_interval(segment_duration * 0.5)
+	dramatic_shake_tween.tween_callback(Callable(self, "_set_camera_dramatic_offset").bind(Vector2.ZERO))
+	dramatic_shake_tween.tween_callback(Callable(self, "_clear_dramatic_shake"))
+
+func _set_camera_dramatic_offset(offset: Vector2):
+	camera_dramatic_offset = offset
+	_update_camera_combined_offset()
+
+func _clear_dramatic_shake():
+	dramatic_shake_tween = null
+	camera_dramatic_offset = Vector2.ZERO
+	_update_camera_combined_offset()
 func _create_damage_burst_particles():
 	var burst_particles = CPUParticles2D.new()
 	add_child(burst_particles)
@@ -818,6 +1107,15 @@ func _apply_damage_audio_effects():
 		footstep_audio.pitch_scale = 0.6
 	var audio_timer = get_tree().create_timer(1.0, true, false, true)
 	audio_timer.timeout.connect(_restore_audio_pitch)
+
+func _set_camera_damage_hit_offset(offset: Vector2):
+	camera_damage_hit_offset = offset
+	_update_camera_combined_offset()
+
+func _clear_damage_hit_shake():
+	damage_hit_shake_tween = null
+	camera_damage_hit_offset = Vector2.ZERO
+	_update_camera_combined_offset()
 func _restore_audio_pitch():
 	if attack_audio:
 		attack_audio.pitch_scale = 1.0
@@ -860,6 +1158,261 @@ func _find_best_rune_for_slot(slot_index: int, inventory: Dictionary, cooldowns:
 			if not cooldowns.has(rune_type):
 				return rune_type
 	return null
+func _open_synergy_menu():
+	if synergy_ui:
+		if synergy_ui.has_method("show_synergy_menu"):
+			synergy_ui.show_synergy_menu()
+
+func _initialize_parry_system():
+	if parry_system:
+		return
+
+	parry_system = ParrySystem.new()
+	parry_system.parry_window_duration = 0.3
+	parry_system.failure_cooldown = 0.5
+	parry_system.parry_started.connect(_on_parry_window_started)
+	parry_system.parry_failed.connect(_on_parry_failed)
+	parry_system.parry_window_ended.connect(_on_parry_window_ended)
+	add_child(parry_system)
+
+	parry_audio = AudioStreamPlayer2D.new()
+	parry_audio.stream = PARRY_CLANG_SOUND
+	parry_audio.volume_db = -1.5
+	parry_audio.bus = "Master"
+	add_child(parry_audio)
+
+func _attempt_parry():
+	if not parry_system:
+		return
+
+	if parry_system.start_parry():
+		_play_parry_activation_effect()
+	else:
+		if parry_system.is_on_cooldown():
+			_play_parry_denied_feedback()
+
+func try_parry(projectile: Node) -> bool:
+	if not parry_system:
+		return false
+
+	if parry_system.try_parry_hit():
+		_handle_parry_success(projectile)
+		return true
+	return false
+
+func _play_parry_activation_effect():
+	if sprite:
+		var flash_tween = create_tween()
+		flash_tween.tween_property(sprite, "modulate", Color(1.2, 1.2, 1.35), 0.05)
+		flash_tween.tween_property(sprite, "modulate", Color.WHITE, 0.18)
+
+func _play_parry_denied_feedback():
+	if sprite:
+		var tween = create_tween()
+		tween.tween_property(sprite, "modulate", Color(1.0, 0.6, 0.6), 0.05)
+		tween.tween_property(sprite, "modulate", Color.WHITE, 0.2)
+
+func _handle_parry_success(projectile: Node):
+	_clear_parry_shield_effect(true)
+	_spawn_parry_success_ripple()
+	if sprite:
+		var flash_tween = create_tween()
+		flash_tween.tween_property(sprite, "modulate", Color(1.4, 1.4, 1.4), 0.06)
+		flash_tween.tween_property(sprite, "modulate", Color.WHITE, 0.22)
+	if parry_audio and parry_audio.stream:
+		parry_audio.pitch_scale = randf_range(0.95, 1.05)
+		parry_audio.play()
+	if projectile and projectile.has_method("deflect_from_player"):
+		projectile.deflect_from_player(self)
+
+func _on_parry_window_started():
+	_spawn_parry_shield_effect()
+
+func _on_parry_failed():
+	_play_parry_denied_feedback()
+	_clear_parry_shield_effect()
+
+func _on_parry_window_ended(success: bool):
+	if success:
+		return
+	_clear_parry_shield_effect()
+
+func _spawn_parry_shield_effect():
+	_clear_parry_shield_effect(true)
+	var shield := Node2D.new()
+	parry_shield_effect = shield
+	shield.position = Vector2.ZERO
+	shield.z_index = z_index + 3
+	add_child(shield)
+
+	var ring := Line2D.new()
+	ring.points = _make_arc_points(48.0, 40, facing_direction, 180.0)
+	ring.width = 12
+	ring.default_color = Color(0.85, 0.95, 1.0, 0.9)
+	ring.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	ring.end_cap_mode = Line2D.LINE_CAP_ROUND
+	ring.texture_mode = Line2D.LINE_TEXTURE_STRETCH
+	var gradient := Gradient.new()
+	gradient.add_point(0.0, Color(0.9, 0.95, 1.0, 1.0))
+	gradient.add_point(1.0, Color(0.4, 0.7, 1.0, 0.1))
+	ring.gradient = gradient
+	shield.add_child(ring)
+
+	shield.scale = Vector2(0.6, 0.6)
+	shield.modulate = Color(1.0, 1.0, 1.0, 0.85)
+	var tween := shield.create_tween()
+	tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(shield, "scale", Vector2.ONE, 0.1)
+
+func _clear_parry_shield_effect(immediate: bool = false):
+	if not parry_shield_effect or not is_instance_valid(parry_shield_effect):
+		parry_shield_effect = null
+		return
+
+	var shield := parry_shield_effect
+	parry_shield_effect = null
+	if immediate:
+		shield.queue_free()
+		return
+
+	var tween := shield.create_tween()
+	tween.tween_property(shield, "modulate:a", 0.0, 0.1)
+	tween.tween_callback(func():
+		if is_instance_valid(shield):
+			shield.queue_free()
+	)
+
+func _spawn_parry_success_ripple():
+	var ripple := Node2D.new()
+	ripple.position = Vector2.ZERO
+	ripple.z_index = z_index + 4
+	add_child(ripple)
+
+	var ring := Line2D.new()
+	ring.points = _make_circle_points(24.0, 36)
+	ring.width = 16
+	ring.default_color = Color(1.0, 0.95, 0.6, 0.95)
+	var gradient := Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 0.95, 0.6, 1.0))
+	gradient.add_point(1.0, Color(1.0, 0.6, 0.2, 0.0))
+	ring.gradient = gradient
+	ring.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	ring.end_cap_mode = Line2D.LINE_CAP_ROUND
+	ripple.add_child(ring)
+
+	ripple.scale = Vector2(0.5, 0.5)
+	var tween := ripple.create_tween()
+	tween.tween_property(ripple, "scale", Vector2(2.0, 2.0), 0.25)
+	tween.parallel().tween_property(ripple, "modulate:a", 0.0, 0.25)
+	tween.tween_callback(func():
+		if is_instance_valid(ripple):
+			ripple.queue_free()
+	)
+
+func _setup_pause_menu():
+	if pause_menu and is_instance_valid(pause_menu):
+		pause_menu.queue_free()
+	pause_menu = PAUSE_MENU_SCENE.instantiate()
+	add_child(pause_menu)
+	pause_menu.resume_requested.connect(_on_pause_menu_resume)
+	pause_menu.restart_requested.connect(_on_pause_menu_restart)
+	pause_menu.quit_requested.connect(_on_pause_menu_quit)
+	pause_menu.hide_menu()
+
+func _pause_game():
+	if get_tree().paused:
+		return
+	if not pause_menu:
+		_setup_pause_menu()
+	stored_mouse_mode = Input.get_mouse_mode()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	get_tree().paused = true
+	is_pause_menu_active = true
+	pause_menu.show_menu()
+
+func _resume_game():
+	if not get_tree().paused and not is_pause_menu_active:
+		return
+	get_tree().paused = false
+	is_pause_menu_active = false
+	if pause_menu:
+		pause_menu.hide_menu()
+	Input.set_mouse_mode(stored_mouse_mode)
+
+func _on_pause_menu_resume():
+	_resume_game()
+
+func _on_pause_menu_restart():
+	_resume_game()
+	get_tree().reload_current_scene()
+
+func _on_pause_menu_quit():
+	_resume_game()
+	get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+
+func _make_circle_points(radius: float, segments: int) -> PackedVector2Array:
+	var points: Array[Vector2] = []
+	var count: int = max(3, segments)
+	for i in range(count):
+		var angle := TAU * float(i) / float(count)
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	if points.size() > 0:
+		points.append(points[0])
+	return PackedVector2Array(points)
+
+func _make_arc_points(radius: float, segments: int, direction: Vector2, arc_angle: float) -> PackedVector2Array:
+	var points: Array[Vector2] = []
+	var count: int = max(2, segments)
+	var start_angle = direction.angle() - deg_to_rad(arc_angle / 2.0)
+	var end_angle = direction.angle() + deg_to_rad(arc_angle / 2.0)
+	var angle_step = (end_angle - start_angle) / float(count - 1)
+	for i in range(count):
+		var angle = start_angle + angle_step * float(i)
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	return PackedVector2Array(points)
+
+func _ensure_input_actions():
+	if not InputMap.has_action("pause_game"):
+		InputMap.add_action("pause_game")
+	else:
+		InputMap.action_erase_events("pause_game")
+	var pause_event := InputEventKey.new()
+	pause_event.physical_keycode = KEY_ESCAPE
+	pause_event.keycode = KEY_ESCAPE
+	InputMap.action_add_event("pause_game", pause_event)
+
+	if not InputMap.has_action("parry"):
+		InputMap.add_action("parry")
+	else:
+		InputMap.action_erase_events("parry")
+	var parry_event := InputEventKey.new()
+	parry_event.physical_keycode = KEY_F
+	parry_event.keycode = KEY_F
+	InputMap.action_add_event("parry", parry_event)
+
+	if not InputMap.has_action("melee_attack"):
+		InputMap.add_action("melee_attack")
+	else:
+		InputMap.action_erase_events("melee_attack")
+	var melee_event := InputEventKey.new()
+	melee_event.physical_keycode = KEY_C
+	melee_event.keycode = KEY_C
+	InputMap.action_add_event("melee_attack", melee_event)
+
+	if not InputMap.has_action("open_synergy"):
+		InputMap.add_action("open_synergy")
+	else:
+		InputMap.action_erase_events("open_synergy")
+	var synergy_event := InputEventKey.new()
+	synergy_event.physical_keycode = KEY_S
+	synergy_event.keycode = KEY_S
+	InputMap.action_add_event("open_synergy", synergy_event)
+
+func _exit_tree():
+	if pause_menu and is_instance_valid(pause_menu):
+		pause_menu.queue_free()
+		pause_menu = null
+
 func _drop_rune():
 	var rune_system = get_node("../RuneSystem")
 	if rune_system:
@@ -961,6 +1514,7 @@ func _on_rune_changed(slot: int, rune_type):
 func _setup_quest_systems():
 	quest_system = _find_node_by_name(get_tree().current_scene, "QuestSystem")
 	medkit_system = _find_node_by_name(get_tree().current_scene, "MedkitSystem")
+	synergy_ui = _find_node_by_name(get_tree().current_scene, "SynergyUI")
 	if not medkit_system:
 		medkit_system = preload("res://scripts/MedkitSystem.gd").new()
 		medkit_system.name = "MedkitSystem"
@@ -1000,12 +1554,19 @@ func get_effective_speed() -> float:
 		if quest_system.has_active_penalty(quest_system.PenaltyType.MOVEMENT_SPEED_REDUCTION):
 			var penalty = quest_system.get_penalty_multiplier(quest_system.PenaltyType.MOVEMENT_SPEED_REDUCTION)
 			base_speed *= (1.0 - penalty)
+	if has_meta("synergy_movement_speed"):
+		base_speed *= get_meta("synergy_movement_speed")
 	base_speed *= environment_speed_multiplier
+	base_speed *= _speed_debuff_multiplier
 	return base_speed
 func get_effective_attack_damage() -> float:
 	var base_damage = 1.0
 	if reward_system and reward_system.has_method("get_attack_multiplier"):
 		base_damage *= reward_system.get_attack_multiplier()
+	if has_meta("synergy_attack_damage"):
+		base_damage *= get_meta("synergy_attack_damage")
+	if has_meta("corruption_damage_mult"):
+		base_damage *= get_meta("corruption_damage_mult")
 	return base_damage
 func get_effective_sonar_range() -> float:
 	var base_range = SONAR_RANGE
@@ -1015,6 +1576,12 @@ func get_effective_sonar_range() -> float:
 		if quest_system.has_active_penalty(quest_system.PenaltyType.SONAR_RANGE_REDUCTION):
 			var penalty = quest_system.get_penalty_multiplier(quest_system.PenaltyType.SONAR_RANGE_REDUCTION)
 			base_range *= (1.0 - penalty)
+	if has_meta("synergy_sonar_range"):
+		var synergy_mult = get_meta("synergy_sonar_range")
+		base_range *= synergy_mult
+	if has_meta("corruption_range_mult"):
+		var corruption_mult = get_meta("corruption_range_mult")
+		base_range *= corruption_mult
 	return base_range
 func get_effective_sonar_cooldown() -> float:
 	var base_cooldown = SONAR_COOLDOWN
@@ -1025,14 +1592,19 @@ func get_effective_sonar_cooldown() -> float:
 		if quest_system.has_active_penalty(quest_system.PenaltyType.SONAR_COOLDOWN_INCREASE):
 			var penalty = quest_system.get_penalty_multiplier(quest_system.PenaltyType.SONAR_COOLDOWN_INCREASE)
 			base_cooldown *= (1.0 + penalty)
+	if has_meta("synergy_cooldown_mult"):
+		base_cooldown *= get_meta("synergy_cooldown_mult")
 	return base_cooldown
 func _on_health_changed():
 	if medkit_system and medkit_system.has_method("_on_player_health_changed"):
 		medkit_system._on_player_health_changed(health)
 func start_dash():
+	if _external_dash_active:
+		return
 	if not can_dash or is_dashing:
 		return
 	dash_direction = facing_direction
+	dash_speed_override = DASH_SPEED
 	is_dashing = true
 	can_dash = false
 	var effective_dash_cooldown = DASH_COOLDOWN
@@ -1047,7 +1619,55 @@ func start_dash():
 	dash_tween.tween_property(self, "modulate:a", 1.0, 0.1)
 func _end_dash():
 	is_dashing = false
+	dash_speed_override = DASH_SPEED
 	_stop_dash_trail_particles()
+
+func force_dash(direction: Vector2, speed: float, duration: float, reset_cooldown: bool = false) -> void:
+	if direction.length_squared() < 0.0001:
+		return
+	if _external_dash_active:
+		_finish_external_dash()
+	elif is_dashing:
+		_end_dash()
+	var dash_dir: Vector2 = direction.normalized()
+	var dash_speed: float = speed if speed > 0.0 else DASH_SPEED
+	_cached_can_dash = can_dash
+	_cached_dash_timer = dash_timer
+	_external_dash_reset_cooldown = reset_cooldown
+	dash_direction = dash_dir
+	dash_speed_override = dash_speed
+	if dash_direction.x < -0.001:
+		facing_direction = Vector2.LEFT
+	elif dash_direction.x > 0.001:
+		facing_direction = Vector2.RIGHT
+	update_sprite_direction()
+	velocity = dash_direction * dash_speed_override
+	is_dashing = true
+	_external_dash_active = true
+	if reset_cooldown:
+		can_dash = true
+		dash_timer = 0.0
+	dash_buffer_timer = 0.0
+	var dash_duration: float = max(duration, 0.05)
+	var dash_duration_timer: SceneTreeTimer = get_tree().create_timer(dash_duration)
+	dash_duration_timer.timeout.connect(_finish_external_dash)
+	_create_dash_trail_particles()
+	var dash_tween: Tween = create_tween()
+	dash_tween.tween_property(self, "modulate:a", 0.7, 0.05)
+	dash_tween.tween_property(self, "modulate:a", 1.0, 0.1)
+func _finish_external_dash() -> void:
+	if not _external_dash_active:
+		return
+	_end_dash()
+	if _external_dash_reset_cooldown:
+		can_dash = true
+		dash_timer = 0.0
+	else:
+		can_dash = _cached_can_dash
+		dash_timer = _cached_dash_timer
+	_external_dash_active = false
+	_external_dash_reset_cooldown = false
+
 func discover_nearby_crystals():
 	var crystals = get_tree().get_nodes_in_group("light_crystals")
 	for crystal in crystals:
@@ -1055,6 +1675,7 @@ func discover_nearby_crystals():
 			var distance = global_position.distance_to(crystal.global_position)
 			if distance <= get_effective_sonar_range():
 				crystal._check_for_discovery()
+
 func _apply_crystal_power_up(sonar_duration_boost: float, jump_boost: float, dash_boost: float, duration: float):
 	if crystal_power_active:
 		crystal_power_timer = max(crystal_power_timer, duration)
@@ -1275,6 +1896,9 @@ func get_effective_sonar_duration() -> float:
 	var base_duration = 2.0
 	if crystal_power_active:
 		base_duration *= crystal_sonar_duration_boost
+	
+	if has_meta("synergy_sonar_duration"):
+		base_duration *= get_meta("synergy_sonar_duration")
 	return base_duration
 func _create_landing_dust_particles(impact_velocity: float):
 	var landing_particles = CPUParticles2D.new()
@@ -1413,3 +2037,399 @@ func _create_critical_health_border():
 	)
 	add_child(health_check_timer)
 	health_check_timer.start()
+
+func _handle_slide_input(delta: float, direction: int):
+	if is_sliding:
+		slide_timer -= delta
+		if slide_timer <= 0 or not is_on_floor():
+			_end_slide()
+
+	var is_ctrl_pressed = Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_SHIFT)
+	var is_moving_fast = abs(velocity.x) > MIN_SLIDE_SPEED
+
+	if is_ctrl_pressed and is_on_floor():
+		print("[SLIDE DEBUG] CTRL pressed. Speed:", abs(velocity.x), " MinSpeed:", MIN_SLIDE_SPEED, " Fast enough:", is_moving_fast)
+
+	if is_ctrl_pressed and is_on_floor() and is_moving_fast and not is_sliding and not is_dashing:
+		_start_slide(direction)
+
+func _start_slide(direction: int):
+	is_sliding = true
+	slide_timer = SLIDE_DURATION
+
+	var slide_direction = sign(velocity.x) if velocity.x != 0 else facing_direction.x
+	velocity.x = slide_direction * SLIDE_SPEED
+
+	_create_slide_particles()
+
+	if collision_shape:
+		var original_shape = collision_shape.shape
+		if original_shape is RectangleShape2D:
+			var rect = original_shape as RectangleShape2D
+			collision_shape.position.y = 4
+			var new_shape = RectangleShape2D.new()
+			new_shape.size = Vector2(rect.size.x, rect.size.y * 0.6)
+			collision_shape.shape = new_shape
+
+	print("[SLIDE] Started sliding at speed:", velocity.x)
+
+func _end_slide():
+	"""End slide and restore collision"""
+	if not is_sliding:
+		return
+
+	is_sliding = false
+	slide_timer = 0.0
+
+	_clear_slide_hit_metadata()
+
+	if slide_particles and is_instance_valid(slide_particles):
+		slide_particles.emitting = false
+		var cleanup_timer = get_tree().create_timer(slide_particles.lifetime + 0.1)
+		cleanup_timer.timeout.connect(func():
+			if slide_particles and is_instance_valid(slide_particles):
+				slide_particles.queue_free()
+				slide_particles = null
+		)
+
+	if collision_shape:
+		collision_shape.position.y = 0
+		var rect_shape = RectangleShape2D.new()
+		rect_shape.size = Vector2(16, 20)
+		collision_shape.shape = rect_shape
+
+	print("[SLIDE] Ended slide")
+
+func _clear_slide_hit_metadata():
+	var meta_list = get_meta_list()
+	for meta_name in meta_list:
+		if meta_name.begins_with("slide_hit_"):
+			remove_meta(meta_name)
+
+func _create_slide_particles():
+	if slide_particles and is_instance_valid(slide_particles):
+		slide_particles.queue_free()
+
+	slide_particles = CPUParticles2D.new()
+	add_child(slide_particles)
+	slide_particles.position = Vector2(0, 10)
+	slide_particles.emitting = true
+	slide_particles.amount = 25
+	slide_particles.lifetime = 0.7
+	slide_particles.color = Color(0.7, 0.6, 0.5, 0.8)
+
+	var slide_dir = -sign(velocity.x) if velocity.x != 0 else -facing_direction.x
+	slide_particles.direction = Vector2(slide_dir, -0.3)
+	slide_particles.spread = 35.0
+	slide_particles.initial_velocity_min = 40.0
+	slide_particles.initial_velocity_max = 80.0
+	slide_particles.scale_amount_min = 0.3
+	slide_particles.scale_amount_max = 0.8
+	slide_particles.gravity = Vector2(0, 80)
+
+func _check_slide_collision():
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	var slide_damage_range = 40.0
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy) or not enemy is Node2D:
+			continue
+
+		var distance = global_position.distance_to(enemy.global_position)
+		if distance < slide_damage_range:
+			if not has_meta("slide_hit_" + str(enemy.get_instance_id())):
+				_hit_enemy_with_slide(enemy)
+				set_meta("slide_hit_" + str(enemy.get_instance_id()), true)
+
+func _hit_enemy_with_slide(enemy: Node):
+	if enemy.has_method("take_damage"):
+		enemy.take_damage()
+
+	if enemy is CharacterBody2D:
+		var knockback_direction = (enemy.global_position - global_position).normalized()
+		var knockback_force = 300.0
+		enemy.velocity = knockback_direction * knockback_force
+
+	var impact_particles = CPUParticles2D.new()
+	get_parent().add_child(impact_particles)
+	impact_particles.global_position = enemy.global_position
+	impact_particles.emitting = true
+	impact_particles.one_shot = true
+	impact_particles.amount = 15
+	impact_particles.lifetime = 0.4
+	impact_particles.color = Color(1.0, 0.7, 0.3, 0.9)
+	impact_particles.direction = Vector2(0, -1)
+	impact_particles.spread = 180.0
+	impact_particles.initial_velocity_min = 50.0
+	impact_particles.initial_velocity_max = 120.0
+	impact_particles.scale_amount_min = 0.4
+	impact_particles.scale_amount_max = 0.9
+	impact_particles.gravity = Vector2(0, 200)
+
+	await get_tree().create_timer(1.0).timeout
+	if is_instance_valid(impact_particles):
+		impact_particles.queue_free()
+
+func _start_melee_charge():
+	is_charging_melee = true
+	melee_charge_time = 0.0
+
+	var melee_direction = facing_direction
+	if melee_direction == Vector2.ZERO:
+		melee_direction = Vector2.RIGHT
+
+	melee_charge_arc = Line2D.new()
+	add_child(melee_charge_arc)
+	melee_charge_arc.z_index = z_index + 1
+	melee_charge_arc.default_color = Color(1.0, 0.95, 0.6, 0.0)
+	melee_charge_arc.width = 5.0 
+	melee_charge_arc.end_cap_mode = Line2D.LINE_CAP_ROUND
+	melee_charge_arc.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	melee_charge_arc.antialiased = true
+	melee_charge_arc.joint_mode = Line2D.LINE_JOINT_ROUND
+
+	melee_charge_arc.position = melee_direction * 25
+
+func _update_melee_charge(delta: float):
+	melee_charge_time += delta
+	melee_charge_time = min(melee_charge_time, MELEE_CHARGE_TIME)
+
+	if melee_charge_arc and is_instance_valid(melee_charge_arc):
+		var charge_percent = melee_charge_time / MELEE_CHARGE_TIME
+
+		var melee_direction = facing_direction
+		if melee_direction == Vector2.ZERO:
+			melee_direction = Vector2.RIGHT
+
+		melee_charge_arc.position = melee_direction * 25
+
+		var arc_degrees = 80.0
+		var arc_radius = 45.0
+
+		var aim_angle = melee_direction.angle()
+		var start_angle = aim_angle - deg_to_rad(arc_degrees / 2.0)
+		var end_angle = aim_angle + deg_to_rad(arc_degrees / 2.0)
+
+		var current_end_angle = lerp(start_angle, end_angle, charge_percent)
+
+		melee_charge_arc.clear_points()
+		var point_count = 16
+		for i in range(point_count):
+			var t = float(i) / float(point_count - 1)
+			var angle = lerp(start_angle, current_end_angle, t)
+			var point = Vector2(cos(angle), sin(angle)) * arc_radius
+			melee_charge_arc.add_point(point)
+
+		var alpha = lerp(0.3, 0.95, charge_percent)
+		melee_charge_arc.default_color.a = alpha
+
+		if charge_percent >= 1.0 and (not melee_charge_particles or not is_instance_valid(melee_charge_particles)):
+			_create_charge_ready_particles()
+
+func _create_charge_ready_particles():
+	melee_charge_particles = CPUParticles2D.new()
+	add_child(melee_charge_particles)
+	melee_charge_particles.position = Vector2(0, 0)
+	melee_charge_particles.emitting = true
+	melee_charge_particles.amount = 20
+	melee_charge_particles.lifetime = 0.5
+	melee_charge_particles.color = Color(1.0, 0.7, 0.3, 0.9)
+	melee_charge_particles.direction = Vector2(0, 0)
+	melee_charge_particles.spread = 360
+	melee_charge_particles.initial_velocity_min = 40
+	melee_charge_particles.initial_velocity_max = 80
+	melee_charge_particles.scale_amount_min = 0.3
+	melee_charge_particles.scale_amount_max = 0.7
+	melee_charge_particles.gravity = Vector2(0, -50)
+	print("[MELEE] FULLY CHARGED! Particles bursting!")
+
+func _release_melee_charge():
+	is_charging_melee = false
+	var charge_percent = melee_charge_time / MELEE_CHARGE_TIME
+
+	if melee_charge_arc and is_instance_valid(melee_charge_arc):
+		melee_charge_arc.queue_free()
+		melee_charge_arc = null
+	if melee_charge_particles and is_instance_valid(melee_charge_particles):
+		melee_charge_particles.emitting = false
+		melee_charge_particles.queue_free()
+		melee_charge_particles = null
+
+	can_melee_attack = false
+	melee_attack_timer = MELEE_COOLDOWN
+
+	var melee_direction = facing_direction
+	if melee_direction == Vector2.ZERO:
+		melee_direction = Vector2.RIGHT
+
+	if melee_charge_time < 0.3:
+		_perform_instant_melee(melee_direction)
+	else:
+		_fire_melee_wave(melee_direction, charge_percent)
+
+func _perform_instant_melee(melee_direction: Vector2):
+	var melee_attack: MeleeAttack = MELEE_ATTACK_RESOURCE.new()
+	add_child(melee_attack)
+	melee_attack.setup(self, melee_direction, get_effective_attack_damage())
+	if abs(melee_direction.x) > 0.01:
+		facing_direction = Vector2.RIGHT if melee_direction.x > 0 else Vector2.LEFT
+		update_sprite_direction()
+	_play_melee_feedback()
+	print("[MELEE] Quick swing")
+
+func _fire_melee_wave(direction: Vector2, charge_percent: float):
+	var wave = Area2D.new()
+	wave.add_to_group("player_projectiles")
+	get_parent().add_child(wave)
+	wave.global_position = global_position + direction * 30
+
+	wave.collision_layer = 0
+	wave.collision_mask = 2
+
+	var wave_arc = Line2D.new()
+	wave.add_child(wave_arc)
+	wave_arc.width = 5.0 
+	wave_arc.default_color = Color(1.0, 0.95, 0.6, 0.95)
+	wave_arc.end_cap_mode = Line2D.LINE_CAP_ROUND
+	wave_arc.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	wave_arc.antialiased = true
+	wave_arc.joint_mode = Line2D.LINE_JOINT_ROUND
+
+	var arc_degrees = 80.0
+	var arc_radius = 45.0
+	var aim_angle = direction.angle()
+	var start_angle = aim_angle - deg_to_rad(arc_degrees / 2.0)
+	var end_angle = aim_angle + deg_to_rad(arc_degrees / 2.0)
+
+	var point_count = 16
+	for i in range(point_count):
+		var t = float(i) / float(point_count - 1)
+		var angle = lerp(start_angle, end_angle, t)
+		var point = Vector2(cos(angle), sin(angle)) * arc_radius
+		wave_arc.add_point(point)
+
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = 25 * (1.0 + charge_percent * 0.3)
+	collision.shape = shape
+	wave.add_child(collision)
+
+	wave.set_meta("direction", direction)
+	wave.set_meta("speed", MELEE_WAVE_SPEED)
+	wave.set_meta("damage", get_effective_attack_damage() * MELEE_WAVE_DAMAGE_MULTIPLIER * (1.0 + charge_percent))
+	wave.set_meta("lifetime", 1.5)
+	wave.set_meta("birth_time", Time.get_ticks_msec() / 1000.0)
+	wave.body_entered.connect(_on_wave_hit.bind(wave))
+	wave.area_entered.connect(_on_wave_hit_area.bind(wave))
+
+	var camera = get_node("Camera2D")
+	if camera:
+		_create_quick_camera_shake(camera, 3.0)
+	_play_melee_feedback()
+
+func _physics_process_wave_movement(delta: float):
+	var waves = get_tree().get_nodes_in_group("player_projectiles")
+	for wave in waves:
+		if not wave.has_meta("direction"):
+			continue
+		var direction = wave.get_meta("direction")
+		var speed = wave.get_meta("speed", MELEE_WAVE_SPEED)
+		wave.global_position += direction * speed * delta
+		var birth_time = wave.get_meta("birth_time", 0.0)
+		var current_time = Time.get_ticks_msec() / 1000.0
+		var lifetime = wave.get_meta("lifetime", 2.0)
+		if current_time - birth_time > lifetime:
+			_destroy_wave(wave)
+
+func _on_wave_hit(body: Node, wave: Area2D):
+	if body.has_method("take_damage"):
+		var damage = wave.get_meta("damage", 1)
+		for i in range(int(damage)):
+			body.take_damage()
+		print("[WAVE] Hit enemy for ", damage, " damage!")
+		_destroy_wave(wave)
+
+func _on_wave_hit_area(area: Area2D, wave: Area2D):
+	var parent = area.get_parent()
+	if parent and parent.has_method("take_damage"):
+		var damage = wave.get_meta("damage", 1)
+		for i in range(int(damage)):
+			parent.take_damage()
+		_destroy_wave(wave)
+
+func _destroy_wave(wave: Area2D):
+	if not is_instance_valid(wave):
+		return
+	var explosion = CPUParticles2D.new()
+	get_parent().add_child(explosion)
+	explosion.global_position = wave.global_position
+	explosion.emitting = true
+	explosion.one_shot = true
+	explosion.amount = 20
+	explosion.lifetime = 0.4
+	explosion.color = Color(1.0, 0.8, 0.4, 0.9)
+	explosion.direction = Vector2(0, -1)
+	explosion.spread = 360
+	explosion.initial_velocity_min = 60
+	explosion.initial_velocity_max = 120
+	explosion.scale_amount_min = 0.4
+	explosion.scale_amount_max = 0.9
+	explosion.gravity = Vector2(0, 100)
+	wave.queue_free()
+	await get_tree().create_timer(1.0).timeout
+	if is_instance_valid(explosion):
+		explosion.queue_free()
+
+func _create_wave_sprite(charge_percent: float) -> Sprite2D:
+	var sprite_node = Sprite2D.new()
+	var size = 64
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var center = Vector2(size / 2, size / 2)
+	for x in range(size):
+		for y in range(size):
+			var pos = Vector2(x, y)
+			var offset = pos - center
+			var angle = offset.angle()
+			var dist = offset.length()
+			if abs(angle) < PI * 0.5:
+				var inner_radius = 12.0
+				var outer_radius = 28.0
+				if dist > inner_radius and dist < outer_radius:
+					var alpha = 1.0 - (dist - inner_radius) / (outer_radius - inner_radius)
+					alpha *= (1.0 - abs(angle) / (PI * 0.5))
+					var brightness = lerp(0.8, 1.0, charge_percent)
+					image.set_pixel(x, y, Color(1.0 * brightness, 0.95 * brightness, 0.6 * brightness, alpha * 0.95))
+	sprite_node.texture = ImageTexture.create_from_image(image)
+	sprite_node.material = CanvasItemMaterial.new()
+	sprite_node.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	return sprite_node
+
+func _create_wave_texture_simple() -> ImageTexture:
+	var size = 128
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var center = Vector2(size / 2, size / 2)
+
+	for x in range(size):
+		for y in range(size):
+			var pos = Vector2(x, y)
+			var offset = pos - center
+			var angle = offset.angle()
+			var dist = offset.length()
+
+			if abs(angle) < PI * 0.5:
+				var inner_radius = 25.0
+				var outer_radius = 52.0
+				if dist > inner_radius and dist < outer_radius:
+					var alpha = 1.0 - (dist - inner_radius) / (outer_radius - inner_radius)
+					alpha *= (1.0 - abs(angle) / (PI * 0.5))
+					alpha = pow(alpha, 0.7)
+					image.set_pixel(x, y, Color(1.0, 0.95, 0.6, alpha * 0.9))
+
+	return ImageTexture.create_from_image(image)
+
+func _create_quick_camera_shake(camera: Camera2D, intensity: float):
+	var shake_tween = create_tween()
+	for i in range(4):
+		var offset_val = Vector2(randf_range(-intensity, intensity), randf_range(-intensity, intensity))
+		shake_tween.tween_property(camera, "offset", offset_val, 0.05)
+	shake_tween.tween_property(camera, "offset", Vector2.ZERO, 0.1)
